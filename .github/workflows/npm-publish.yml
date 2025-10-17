@@ -20,16 +20,16 @@ jobs:
         include:
           - goos: darwin
             goarch: amd64
-            out: i18n-translator-darwin-x64
+            out: i18n-ai-translator-darwin-x64
           - goos: darwin
             goarch: arm64
-            out: i18n-translator-darwin-arm64
+            out: i18n-ai-translator-darwin-arm64
           - goos: linux
             goarch: amd64
-            out: i18n-translator-linux-x64
+            out: i18n-ai-translator-linux-x64
           - goos: windows
             goarch: amd64
-            out: i18n-translator-windows-x64.exe
+            out: i18n-ai-translator-windows-x64.exe
     steps:
       - name: Checkout
         uses: actions/checkout@v4
