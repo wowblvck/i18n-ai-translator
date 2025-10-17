@@ -69,8 +69,8 @@ jobs:
           cache: 'npm'
 
       - name: Create GitHub Release (attach binaries)
-        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'release'
-        uses: softprops/action-gh-release@v1
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
         with:
           files: dist/*
         env:
