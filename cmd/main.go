@@ -67,7 +67,7 @@ func main() {
 
 	if *apiKey == "" {
 		fmt.Fprintf(os.Stderr, "Error: API key is required for translation service\n")
-		fmt.Fprintf(os.Stderr, "Use --api-key flag or set GOOGLE_TRANSLATE_API_KEY environment variable\n\n")
+		fmt.Fprintf(os.Stderr, "Use --api-key flag or set OPENAI_API_KEY environment variable\n\n")
 		flag.Usage()
 		os.Exit(1)
 	}

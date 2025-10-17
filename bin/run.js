@@ -3,7 +3,7 @@ const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 
-const binName = process.platform === 'win32' ? 'i18n-translator.exe' : 'i18n-translator';
+const binName = process.platform === 'win32' ? 'i18n-ai-translator.exe' : 'i18n-ai-translator';
 const binPath = path.join(__dirname, binName);
 
 if (!fs.existsSync(binPath)) {
