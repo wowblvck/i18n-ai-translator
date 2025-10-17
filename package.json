@@ -1,6 +1,6 @@
 {
   "name": "@wowblvck/i18n-ai-translator",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Automatic translation tool for i18n JSON files",
   "main": "bin/i18n-translator",
   "bin": {
@@ -9,9 +9,9 @@
   "scripts": {
     "build": "go build -o bin/i18n-translator ./cmd/main.go",
     "build:all": "npm run build:linux && npm run build:macos && npm run build:windows",
-    "build:linux": "GOOS=linux GOARCH=amd64 go build -o bin/i18n-translator-linux-x64 ./cmd/main.go",
-    "build:macos": "GOOS=darwin GOARCH=amd64 go build -o bin/i18n-translator-darwin-x64 ./cmd/main.go && GOOS=darwin GOARCH=arm64 go build -o bin/i18n-translator-darwin-arm64 ./cmd/main.go",
-    "build:windows": "GOOS=windows GOARCH=amd64 go build -o bin/i18n-translator-windows-x64.exe ./cmd/main.go",
+    "build:linux": "GOOS=linux GOARCH=amd64 go build -o bin/i18n-ai-translator-linux-x64 ./cmd/main.go",
+    "build:macos": "GOOS=darwin GOARCH=amd64 go build -o bin/i18n-ai-translator-darwin-x64 ./cmd/main.go && GOOS=darwin GOARCH=arm64 go build -o bin/i18n-ai-translator-darwin-arm64 ./cmd/main.go",
+    "build:windows": "GOOS=windows GOARCH=amd64 go build -o bin/i18n-ai-translator-windows-x64.exe ./cmd/main.go",
     "postinstall": "node scripts/postinstall.js",
     "clean": "rm -rf bin/"
   },

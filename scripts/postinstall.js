@@ -9,12 +9,12 @@ const arch = process.arch;         // 'x64', 'arm64', etc.
 
 function resolveAsset() {
   if (platform === 'darwin') {
-    if (arch === 'arm64') return 'i18n-translator-darwin-arm64';
-    if (arch === 'x64') return 'i18n-translator-darwin-x64';
+    if (arch === 'arm64') return 'i18n-ai-translator-darwin-arm64';
+    if (arch === 'x64') return 'i18n-ai-translator-darwin-x64';
   } else if (platform === 'linux') {
-    if (arch === 'x64') return 'i18n-translator-linux-x64';
+    if (arch === 'x64') return 'i18n-ai-translator-linux-x64';
   } else if (platform === 'win32') {
-    if (arch === 'x64') return 'i18n-translator-windows-x64.exe';
+    if (arch === 'x64') return 'i18n-ai-translator-windows-x64.exe';
   }
   return null;
 }
@@ -27,9 +27,9 @@ if (!asset) {
 }
 
 const tag = `v${version}`;
-const url = `https://github.com/wowblvck/i18n-translator/releases/download/${tag}/${asset}`;
+const url = `https://github.com/wowblvck/i18n-ai-translator/releases/download/${tag}/${asset}`;
 const binDir = path.join(__dirname, '..', 'bin');
-const dest = path.join(binDir, asset.endsWith('.exe') ? 'i18n-translator.exe' : 'i18n-translator');
+const dest = path.join(binDir, asset.endsWith('.exe') ? 'i18n-ai-translator.exe' : 'i18n-ai-translator');
 
 if (!fs.existsSync(binDir)) fs.mkdirSync(binDir, { recursive: true });
 
