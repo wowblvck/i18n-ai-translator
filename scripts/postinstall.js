@@ -2,6 +2,7 @@
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
+const { URL } = require('url');
 
 const version = process.env.npm_package_version || 'latest';
 const platform = process.platform; // 'darwin', 'linux', 'win32'
@@ -34,23 +35,44 @@ const dest = path.join(binDir, asset.endsWith('.exe') ? 'i18n-ai-translator.exe'
 if (!fs.existsSync(binDir)) fs.mkdirSync(binDir, { recursive: true });
 
 console.log(`Downloading binary: ${url}`);
-https.get(url, (res) => {
-  if (res.statusCode !== 200) {
-    console.error(`Failed to download ${url}: HTTP ${res.statusCode}`);
-    res.resume();
+
+/**
+ * Download a file with automatic redirect handling (302, 301, etc.)
+ */
+function downloadWithRedirect(url, dest, depth = 0) {
+  if (depth > 5) {
+    console.error('Too many redirects');
     process.exit(1);
   }
-  const file = fs.createWriteStream(dest, { mode: 0o755 });
-  res.pipe(file);
-  file.on('finish', () => {
-    file.close(() => {
-      if (process.platform !== 'win32') {
-        try { fs.chmodSync(dest, 0o755); } catch (_) { }
-      }
-      console.log(`Installed binary to ${dest}`);
+
+  https.get(url, (res) => {
+    if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+      const redirectUrl = new URL(res.headers.location, url).toString();
+      console.log(`Redirected to ${redirectUrl}`);
+      res.resume();
+      return downloadWithRedirect(redirectUrl, dest, depth + 1);
+    }
+
+    if (res.statusCode !== 200) {
+      console.error(`Failed to download ${url}: HTTP ${res.statusCode}`);
+      res.resume();
+      process.exit(1);
+    }
+
+    const file = fs.createWriteStream(dest, { mode: 0o755 });
+    res.pipe(file);
+    file.on('finish', () => {
+      file.close(() => {
+        if (process.platform !== 'win32') {
+          try { fs.chmodSync(dest, 0o755); } catch (_) { }
+        }
+        console.log(`Installed binary to ${dest}`);
+      });
     });
+  }).on('error', (err) => {
+    console.error(`Error downloading ${url}:`, err);
+    process.exit(1);
   });
-}).on('error', (err) => {
-  console.error(`Error downloading ${url}:`, err);
-  process.exit(1);
-});
+}
+
+downloadWithRedirect(url, dest);

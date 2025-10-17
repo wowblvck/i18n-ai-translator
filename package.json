@@ -1,8 +1,8 @@
 {
   "name": "@wowblvck/i18n-ai-translator",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Automatic translation tool for i18n JSON files",
-  "main": "bin/i18n-translator",
+  "main": "bin/i18n-ai-translator",
   "bin": {
     "i18n-translate": "bin/run.js"
   },
