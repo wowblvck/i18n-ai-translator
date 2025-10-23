@@ -130,33 +130,64 @@ func (t *I18nTranslator) TranslateFile(sourceFile, targetFile, sourceLang, targe
 
 func buildJobs(sourceDir, targetDir, languages string) ([]translateJob, error) {
 	jobs := []translateJob{}
-	err := filepath.Walk(sourceDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if info.IsDir() || !strings.HasSuffix(path, ".json") {
+
+	// Проверяем, является ли sourceDir файлом или папкой
+	info, err := os.Stat(sourceDir)
+	if err != nil {
+		return nil, fmt.Errorf("source path does not exist: %s", sourceDir)
+	}
+
+	if info.IsDir() {
+		// Обрабатываем как папку (рекурсивно)
+		err := filepath.Walk(sourceDir, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			if info.IsDir() || !strings.HasSuffix(path, ".json") {
+				return nil
+			}
+
+			relPath, _ := filepath.Rel(sourceDir, path)
+			for _, lang := range strings.Split(languages, ",") {
+				lang = strings.TrimSpace(lang)
+				if lang == "" {
+					continue
+				}
+				targetPath := filepath.Join(targetDir, lang, relPath)
+				jobs = append(jobs, translateJob{
+					sourcePath: path,
+					targetPath: targetPath,
+					relPath:    relPath,
+					lang:       lang,
+				})
+			}
 			return nil
+		})
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		// Обрабатываем как отдельный файл
+		if !strings.HasSuffix(sourceDir, ".json") {
+			return nil, fmt.Errorf("source file must be a .json file: %s", sourceDir)
 		}
 
-		relPath, _ := filepath.Rel(sourceDir, path)
+		fileName := filepath.Base(sourceDir)
 		for _, lang := range strings.Split(languages, ",") {
 			lang = strings.TrimSpace(lang)
 			if lang == "" {
 				continue
 			}
-			targetPath := filepath.Join(targetDir, lang, relPath)
+			targetPath := filepath.Join(targetDir, lang, fileName)
 			jobs = append(jobs, translateJob{
-				sourcePath: path,
+				sourcePath: sourceDir,
 				targetPath: targetPath,
-				relPath:    relPath,
+				relPath:    fileName,
 				lang:       lang,
 			})
 		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
 	}
+
 	return jobs, nil
 }
 
