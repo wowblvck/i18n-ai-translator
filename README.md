@@ -23,6 +23,7 @@ Automatic translation tool for i18n JSON files using ChatGPT (OpenAI).
 npm install -g @wowblvck/i18n-ai-translator
 # or
 yarn global add @wowblvck/i18n-ai-translator
+```
 
 ### Via Go
 ```bash
