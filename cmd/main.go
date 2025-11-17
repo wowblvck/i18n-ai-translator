@@ -72,12 +72,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Проверяем существование исходной директории
 	if _, err := os.Stat(*sourceDir); os.IsNotExist(err) {
 		log.Fatalf("Source directory does not exist: %s", *sourceDir)
 	}
 
-	// Инициализация сервиса перевода
 	var translationService TranslationService
 	switch *service {
 	case "chatgpt":
@@ -112,33 +110,28 @@ func main() {
 }
 
 func (t *I18nTranslator) TranslateFile(sourceFile, targetFile, sourceLang, targetLang string) error {
-	// Читаем исходный файл как строку
 	data, err := os.ReadFile(sourceFile)
 	if err != nil {
 		return fmt.Errorf("failed to read source file: %v", err)
 	}
 
-	// Отправляем целиком JSON в ChatGPT
 	translatedJSON, err := t.service.Translate(string(data), sourceLang, targetLang)
 	if err != nil {
 		return fmt.Errorf("failed to translate content: %v", err)
 	}
 
-	// Записываем ответ как есть
 	return os.WriteFile(targetFile, []byte(strings.TrimSpace(translatedJSON)), 0644)
 }
 
 func buildJobs(sourceDir, targetDir, languages string) ([]translateJob, error) {
 	jobs := []translateJob{}
 
-	// Проверяем, является ли sourceDir файлом или папкой
 	info, err := os.Stat(sourceDir)
 	if err != nil {
 		return nil, fmt.Errorf("source path does not exist: %s", sourceDir)
 	}
 
 	if info.IsDir() {
-		// Обрабатываем как папку (рекурсивно)
 		err := filepath.Walk(sourceDir, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
 				return err
@@ -167,7 +160,6 @@ func buildJobs(sourceDir, targetDir, languages string) ([]translateJob, error) {
 			return nil, err
 		}
 	} else {
-		// Обрабатываем как отдельный файл
 		if !strings.HasSuffix(sourceDir, ".json") {
 			return nil, fmt.Errorf("source file must be a .json file: %s", sourceDir)
 		}
@@ -191,12 +183,10 @@ func buildJobs(sourceDir, targetDir, languages string) ([]translateJob, error) {
 	return jobs, nil
 }
 
-// Запускаем пул воркеров
 func runJobs(translator *I18nTranslator, jobs []translateJob, sourceLang string, concurrency int) error {
 	jobCh := make(chan translateJob)
 	var wg sync.WaitGroup
 
-	// Воркеры
 	for range concurrency {
 		wg.Go(func() {
 			for job := range jobCh {
@@ -214,7 +204,6 @@ func runJobs(translator *I18nTranslator, jobs []translateJob, sourceLang string,
 		})
 	}
 
-	// Подаём задания
 	go func() {
 		for _, j := range jobs {
 			jobCh <- j

@@ -58,7 +58,6 @@ Special Instructions:
 Return the translation as JSON.
 `, sourceLang, targetLang))
 
-	// Упаковываем текст в массив с одним объектом
 	items := []translateItem{
 		{
 			Original:   text,
@@ -105,16 +104,13 @@ Return the translation as JSON.
 	return out[0].Translated, nil
 }
 
-// extractJSON вырезает JSON из ответа (убирает кодовые блоки и префиксы)
 func extractJSON(s string) string {
-	// Убираем ```json ... ```
 	if strings.HasPrefix(s, "```") {
 		s = strings.TrimPrefix(s, "```json")
 		s = strings.TrimPrefix(s, "```")
 		s = strings.TrimSuffix(s, "```")
 		s = strings.TrimSpace(s)
 	}
-	// Вырезаем по первому [ ... ] или { ... }
 	startArray := strings.Index(s, "[")
 	startObj := strings.Index(s, "{")
 	start := -1
@@ -126,7 +122,6 @@ func extractJSON(s string) string {
 	if start < 0 {
 		return s
 	}
-	// Простая эвристика для конца JSON
 	end := strings.LastIndex(s, "]")
 	if end < 0 || end < start {
 		end = strings.LastIndex(s, "}")
