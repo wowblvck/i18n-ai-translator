@@ -1,14 +1,15 @@
 # 🌍 i18n AI Translator
 
-Automatic translation tool for i18n JSON files using ChatGPT (OpenAI).
+Automatic translation tool for i18n JSON files using AI providers (ChatGPT, Groq, Ollama, LM Studio).
 
 ## 📋 Description
 
-`i18n-ai-translator` is a CLI tool written in Go that automates the translation process of localization (i18n) files for your projects. It uses OpenAI's API (ChatGPT) for high-quality translations while preserving JSON structure, placeholders, and formatting.
+`i18n-ai-translator` is a CLI tool written in Go that automates the translation process of localization (i18n) files for your projects. It supports multiple AI providers — including cloud-based (OpenAI, Groq) and local (Ollama, LM Studio) — while preserving JSON structure, placeholders, and formatting.
 
 ### ✨ Key Features
 
-- 🤖 **AI-powered translation**: Uses ChatGPT for contextually accurate translations
+- 🤖 **Multi-provider support**: ChatGPT, Groq, Ollama, LM Studio
+- 🏠 **Local inference**: Run translations offline via Ollama or LM Studio
 - 📁 **Batch processing**: Translates multiple files and languages simultaneously
 - ⚡ **Parallel processing**: Configurable number of concurrent workers
 - 🔒 **Format preservation**: Keeps placeholders (`{{variable}}`), HTML tags, and i18n functions (`$t(key)`) intact
@@ -38,17 +39,49 @@ npm run build
 ```
 
 ## 🔑 Setup
-Get your OpenAI API key:
+
+### ChatGPT (OpenAI)
 1. Sign up at [OpenAI Platform](https://platform.openai.com/)
 2. Go to [API Keys](https://platform.openai.com/api-keys) section
 3. Create a new API key
 
+### Groq
+1. Sign up at [Groq Console](https://console.groq.com/)
+2. Go to API Keys section
+3. Create a new API key
+
+### Ollama (local, no API key required)
+1. Install [Ollama](https://ollama.com/)
+2. Pull a model: `ollama pull llama3.2`
+3. Start the server: `ollama serve`
+
+### LM Studio (local, no API key required)
+1. Install [LM Studio](https://lmstudio.ai/)
+2. Download a model in the app
+3. Start the local server in the "Local Server" tab
+
 ## 💻 Usage
 
-### Basic example
+### Basic examples
 
+**ChatGPT:**
 ```bash
-i18n-ai-translator --api-key=YOUR_OPENAI_API_KEY --from=en --to=ru,es,fr
+i18n-ai-translator --service=chatgpt --api-key=YOUR_OPENAI_KEY --from=en --to=ru,es,fr
+```
+
+**Groq:**
+```bash
+i18n-ai-translator --service=groq --api-key=YOUR_GROQ_KEY --from=en --to=ru,es,fr
+```
+
+**Ollama (local):**
+```bash
+i18n-ai-translator --service=ollama --model=llama3.2 --from=en --to=ru,es,fr
+```
+
+**LM Studio (local):**
+```bash
+i18n-ai-translator --service=lmstudio --model=your-loaded-model --from=en --to=ru,es,fr
 ```
 
 ### Advanced examples
@@ -56,6 +89,7 @@ i18n-ai-translator --api-key=YOUR_OPENAI_API_KEY --from=en --to=ru,es,fr
 **Translation with custom directories:**
 ```bash
 i18n-ai-translator \
+  --service=chatgpt \
   --source=./src/locales/en \
   --target=./src/locales \
   --api-key=YOUR_API_KEY \
@@ -66,6 +100,7 @@ i18n-ai-translator \
 **Using a specific model:**
 ```bash
 i18n-ai-translator \
+  --service=chatgpt \
   --api-key=YOUR_API_KEY \
   --model=gpt-4o \
   --from=en \
@@ -75,7 +110,8 @@ i18n-ai-translator \
 **Configuring concurrency:**
 ```bash
 i18n-ai-translator \
-  --api-key=YOUR_API_KEY \
+  --service=groq \
+  --api-key=YOUR_GROQ_KEY \
   --from=en \
   --to=ja,ko,zh \
   --concurrency=8
@@ -84,37 +120,52 @@ i18n-ai-translator \
 **Translating a single file:**
 ```bash
 i18n-ai-translator \
+  --service=ollama \
+  --model=llama3.2 \
   --source=./locales/en/common.json \
   --target=./locales \
-  --api-key=YOUR_API_KEY \
   --from=en \
   --to=es
 ```
 
-**Using environment variable for API key:**
+**Ollama with custom server URL:**
 ```bash
-export OPENAI_API_KEY="your-api-key-here"
-i18n-ai-translator --from=en --to=ru,es
+i18n-ai-translator \
+  --service=ollama \
+  --url=http://192.168.1.10:11434/v1 \
+  --model=llama3.2 \
+  --from=en \
+  --to=ru
 ```
 
 ## 🔧 Command-line options
 
 | Parameter | Description | Default value |
 |----------|----------|----------------------|
-| `--api-key` | OpenAI API key (required) | - |
+| `--service` | Translation service: `chatgpt`, `groq`, `ollama`, `lmstudio` | `chatgpt` |
+| `--api-key` | API key (required for `chatgpt` and `groq`) | - |
+| `--model` | Model name (see defaults per provider below) | - |
+| `--url` | Base URL for `ollama` or `lmstudio` | see below |
 | `--from` | Source language code | `en` |
 | `--to` | Target language codes (comma-separated) | `es,fr,de` |
 | `--source` | Source directory or file with translations | `./locales/en` |
 | `--target` | Target directory for translations | `./locales` |
-| `--model` | ChatGPT model | `gpt-4o-mini` |
-| `--service` | Translation service | `chatgpt` |
 | `--concurrency` | Number of concurrent workers | `4` |
 | `--help` | Show help message | - |
 | `--version` | Show version | - |
 
+### Provider defaults
+
+| Service | Default model | Default URL | API key |
+|---------|--------------|-------------|---------|
+| `chatgpt` | `gpt-4o-mini` | `https://api.openai.com/v1` | Required |
+| `groq` | `llama-3.3-70b-versatile` | `https://api.groq.com/openai/v1` | Required |
+| `ollama` | `llama3.2` | `http://localhost:11434/v1` | Not required |
+| `lmstudio` | *(specify via `--model`)* | `http://localhost:1234/v1` | Not required |
+
 ### 🌍 Supported languages
 
-The tool supports all languages that ChatGPT works with. Use standard ISO 639-1 language codes:
+The tool supports all languages available in the chosen AI provider. Use standard ISO 639-1 language codes:
 
 | Code | Language | Code | Language |
 |-----|------|-----|------|
@@ -214,39 +265,39 @@ npm run clean
 
 ## ⚠️ Limitations
 
-- **API Key required**: Active OpenAI API key with available credits
-- **Internet connection**: Required for API communication
-- **Cost**: Translation costs depend on:
+- **API Key required**: Required for `chatgpt` and `groq`; not needed for `ollama` and `lmstudio`
+- **Internet connection**: Required for `chatgpt` and `groq`; `ollama` and `lmstudio` work fully offline
+- **Cost**: Cloud translation costs depend on:
   - Text volume
   - Number of target languages
   - Chosen model
-  - API pricing (check [OpenAI Pricing](https://openai.com/api/pricing/))
-- **Rate limits**: OpenAI API has rate limits based on your account tier
+  - API pricing ([OpenAI Pricing](https://openai.com/api/pricing/), [Groq Pricing](https://groq.com/pricing/))
+- **Rate limits**: Cloud providers have rate limits based on your account tier
 - **Quality**: While AI translations are generally good, manual review is recommended for critical content
-- **Service**: Currently only supports ChatGPT (OpenAI). Other providers may be added in future
+- **Local models**: Translation quality varies by model size — larger models generally produce better results
 
 ## ❓ FAQ
 
-**Q: Do I need to pay for OpenAI API?**  
-A: Yes, you need an OpenAI account with available credits. Check [pricing](https://openai.com/api/pricing/).
+**Q: Do I need to pay to use this tool?**
+A: Not necessarily. `ollama` and `lmstudio` are completely free and work offline. For `chatgpt` and `groq`, you need an account with API access.
 
-**Q: Can I use this with free ChatGPT account?**  
+**Q: Can I use this with free ChatGPT account?**
 A: No, you need API access which is separate from the ChatGPT web interface.
 
-**Q: How much does it cost to translate?**  
-A: Costs depend on text volume and model. For example, translating 100KB of text with `gpt-4o-mini` typically costs $0.01-0.05.
+**Q: How much does it cost to translate?**
+A: Costs depend on text volume and model. For example, translating 100KB of text with `gpt-4o-mini` typically costs $0.01-0.05. Groq is significantly cheaper. Ollama and LM Studio are free.
 
-**Q: Can I translate from multiple source languages?**  
+**Q: Can I translate from multiple source languages?**
 A: Currently, you specify one source language per run. You can run the tool multiple times for different sources.
 
-**Q: Does it work offline?**  
-A: No, internet connection is required to communicate with OpenAI API.
+**Q: Does it work offline?**
+A: Yes, when using `ollama` or `lmstudio`. Cloud providers (`chatgpt`, `groq`) require internet access.
 
-**Q: Will it overwrite existing translations?**  
+**Q: Will it overwrite existing translations?**
 A: Yes, existing target files will be overwritten. Use version control to track changes.
 
-**Q: Can I customize the translation prompts?**  
-A: Not currently via CLI, but you can modify the code in `internal/providers/chatgpt_translate.go`.
+**Q: Can I customize the translation prompts?**
+A: Not currently via CLI, but you can modify the code in `internal/providers/common.go`.
 
-**Q: What if translation fails?**  
+**Q: What if translation fails?**
 A: The tool logs errors and continues with other files. Check the console output for details.

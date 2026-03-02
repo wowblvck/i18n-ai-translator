@@ -32,13 +32,14 @@ type translateJob struct {
 func main() {
 	var (
 		concurrency = flag.Int("concurrency", 4, "Number of parallel workers")
-		model       = flag.String("model", "gpt-4o-mini", "Model for chatgpt service (e.g., gpt-4o-mini)")
+		model       = flag.String("model", "", "Model name (defaults: chatgpt=gpt-4o-mini, groq=llama-3.3-70b-versatile, ollama=llama3.2)")
 		sourceDir   = flag.String("source", "./locales/en", "Source language directory")
 		targetDir   = flag.String("target", "./locales", "Target directory for translations")
 		sourceLang  = flag.String("from", "en", "Source language code")
 		targetLang  = flag.String("to", "es,fr,de", "Target language codes (comma-separated)")
-		apiKey      = flag.String("api-key", "", "Translation API key (required for Google Translate)")
-		service     = flag.String("service", "chatgpt", "Translation service (currently only 'chatgpt' is supported)")
+		apiKey      = flag.String("api-key", "", "API key (required for chatgpt and groq)")
+		url         = flag.String("url", "", "Base URL for ollama or lmstudio (e.g., http://localhost:11434/v1)")
+		service     = flag.String("service", "chatgpt", "Translation service: chatgpt, groq, ollama, lmstudio")
 		help        = flag.Bool("help", false, "Show help message")
 		version     = flag.Bool("version", false, "Show version")
 	)
@@ -49,8 +50,10 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Options:\n")
 		flag.PrintDefaults()
 		fmt.Fprintf(os.Stderr, "\nExamples:\n")
-		fmt.Fprintf(os.Stderr, "  %s --api-key=YOUR_API_KEY --from=en --to=ru,es,fr\n", os.Args[0])
-		fmt.Fprintf(os.Stderr, "  %s --source=./src/locales/en --target=./src/locales --api-key=YOUR_API_KEY\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "  %s --service=chatgpt --api-key=YOUR_KEY --from=en --to=ru,es,fr\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "  %s --service=groq --api-key=YOUR_KEY --model=llama-3.3-70b-versatile --to=ru\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "  %s --service=ollama --model=llama3.2 --to=ru,es\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "  %s --service=lmstudio --model=your-model --to=ru,es\n", os.Args[0])
 	}
 
 	flag.Parse()
@@ -65,9 +68,9 @@ func main() {
 		return
 	}
 
-	if *apiKey == "" {
-		fmt.Fprintf(os.Stderr, "Error: API key is required for translation service\n")
-		fmt.Fprintf(os.Stderr, "Use --api-key flag or set OPENAI_API_KEY environment variable\n\n")
+	needsAPIKey := *service == "chatgpt" || *service == "groq"
+	if needsAPIKey && *apiKey == "" {
+		fmt.Fprintf(os.Stderr, "Error: --api-key is required for %s service\n\n", *service)
 		flag.Usage()
 		os.Exit(1)
 	}
@@ -84,8 +87,26 @@ func main() {
 		if err != nil {
 			log.Fatalf("Failed to initialize ChatGPT service: %v", err)
 		}
+	case "groq":
+		var err error
+		translationService, err = providers.GroqProvider(*apiKey, *model)
+		if err != nil {
+			log.Fatalf("Failed to initialize Groq service: %v", err)
+		}
+	case "ollama":
+		var err error
+		translationService, err = providers.OllamaProvider(*url, *model)
+		if err != nil {
+			log.Fatalf("Failed to initialize Ollama service: %v", err)
+		}
+	case "lmstudio":
+		var err error
+		translationService, err = providers.LMStudioProvider(*url, *model)
+		if err != nil {
+			log.Fatalf("Failed to initialize LM Studio service: %v", err)
+		}
 	default:
-		log.Fatalf("Unsupported translation service: %s", *service)
+		log.Fatalf("Unsupported translation service: %s (supported: chatgpt, groq, ollama, lmstudio)", *service)
 	}
 
 	translator := &I18nTranslator{
