@@ -153,6 +153,11 @@ i18n-ai-translator \
 i18n-ai-translator --config=.i18n-translator.yaml
 ```
 
+**Initialize config file:**
+```bash
+i18n-ai-translator init
+```
+
 **Dry run with existing-file skip:**
 ```bash
 i18n-ai-translator --dry-run --skip-existing --to=ru,es
@@ -174,6 +179,19 @@ i18n-ai-translator --fail-fast --retries=1 --to=ru,es
 ```
 
 Example file in repository: `.i18n-translator.example.yaml`.
+
+### `init` command
+
+Generate a starter config file in your project:
+
+```bash
+i18n-ai-translator init
+```
+
+Options:
+- `--path` path to output config file (default: `.i18n-translator.yaml`)
+- `--example` source template path (default: `.i18n-translator.example.yaml`)
+- `--force` overwrite target file if it exists
 
 ## 🔧 Command-line options
 
