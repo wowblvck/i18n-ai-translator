@@ -42,16 +42,19 @@ type translateJob struct {
 }
 
 type appConfig struct {
-	Service     string `yaml:"service"`
-	Model       string `yaml:"model"`
-	Source      string `yaml:"source"`
-	Target      string `yaml:"target"`
-	From        string `yaml:"from"`
-	To          string `yaml:"to"`
-	APIKey      string `yaml:"api_key"`
-	APIKeyAlt   string `yaml:"api-key"`
-	URL         string `yaml:"url"`
-	Concurrency int    `yaml:"concurrency"`
+	Service      string `yaml:"service"`
+	Model        string `yaml:"model"`
+	Source       string `yaml:"source"`
+	Target       string `yaml:"target"`
+	From         string `yaml:"from"`
+	To           string `yaml:"to"`
+	APIKey       string `yaml:"api_key"`
+	APIKeyAlt    string `yaml:"api-key"`
+	URL          string `yaml:"url"`
+	Concurrency  int    `yaml:"concurrency"`
+	DryRun       bool   `yaml:"dry_run"`
+	ListFiles    bool   `yaml:"list_files"`
+	SkipExisting bool   `yaml:"skip_existing"`
 }
 
 func (c appConfig) apiKey() string {
@@ -131,20 +134,70 @@ func resolveIntOption(flagName string, flagValue int, envValue string, configVal
 	return defaultValue, nil
 }
 
+func resolveBoolOption(flagName string, flagValue bool, envValue string, configValue, defaultValue bool, explicitFlags map[string]bool) (bool, error) {
+	if explicitFlags[flagName] {
+		return flagValue, nil
+	}
+
+	if env := strings.TrimSpace(envValue); env != "" {
+		v, err := strconv.ParseBool(env)
+		if err != nil {
+			return false, fmt.Errorf("%s must be a valid boolean: %w", flagName, err)
+		}
+		return v, nil
+	}
+
+	if configValue {
+		return true, nil
+	}
+
+	return defaultValue, nil
+}
+
+func filterJobsByExisting(jobs []translateJob, skipExisting bool) ([]translateJob, int) {
+	if !skipExisting {
+		return jobs, 0
+	}
+
+	filtered := make([]translateJob, 0, len(jobs))
+	skipped := 0
+	for _, job := range jobs {
+		_, err := os.Stat(job.targetPath)
+		if err == nil {
+			skipped++
+			continue
+		}
+		if !os.IsNotExist(err) {
+			log.Printf("Warning: failed to check target file %s: %v", job.targetPath, err)
+		}
+		filtered = append(filtered, job)
+	}
+	return filtered, skipped
+}
+
+func printPlannedJobs(jobs []translateJob, sourceLang string) {
+	for _, job := range jobs {
+		fmt.Printf("%s -> %s (%s -> %s)\n", job.sourcePath, job.targetPath, sourceLang, job.lang)
+	}
+}
+
 func main() {
 	var (
-		concurrency = flag.Int("concurrency", defaultConcurrency, "Number of parallel workers")
-		model       = flag.String("model", "", "Model name (defaults: chatgpt=gpt-4o-mini, groq=llama-3.3-70b-versatile, gemini=gemini-2.0-flash, ollama=llama3.2)")
-		sourceDir   = flag.String("source", defaultSourceDir, "Source language directory")
-		targetDir   = flag.String("target", defaultTargetDir, "Target directory for translations")
-		sourceLang  = flag.String("from", defaultSourceLang, "Source language code")
-		targetLang  = flag.String("to", defaultTargetLang, "Target language codes (comma-separated)")
-		apiKey      = flag.String("api-key", "", "API key (required for chatgpt, groq, and gemini)")
-		url         = flag.String("url", "", "Base URL for ollama or lmstudio (e.g., http://localhost:11434/v1)")
-		service     = flag.String("service", defaultService, "Translation service: chatgpt, groq, gemini, ollama, lmstudio")
-		configFile  = flag.String("config", "", "Path to YAML config file (auto-loads .i18n-translator.yaml/.yml when omitted)")
-		help        = flag.Bool("help", false, "Show help message")
-		version     = flag.Bool("version", false, "Show version")
+		concurrency  = flag.Int("concurrency", defaultConcurrency, "Number of parallel workers")
+		model        = flag.String("model", "", "Model name (defaults: chatgpt=gpt-4o-mini, groq=llama-3.3-70b-versatile, gemini=gemini-2.0-flash, ollama=llama3.2)")
+		sourceDir    = flag.String("source", defaultSourceDir, "Source language directory")
+		targetDir    = flag.String("target", defaultTargetDir, "Target directory for translations")
+		sourceLang   = flag.String("from", defaultSourceLang, "Source language code")
+		targetLang   = flag.String("to", defaultTargetLang, "Target language codes (comma-separated)")
+		apiKey       = flag.String("api-key", "", "API key (required for chatgpt, groq, and gemini)")
+		url          = flag.String("url", "", "Base URL for ollama or lmstudio (e.g., http://localhost:11434/v1)")
+		service      = flag.String("service", defaultService, "Translation service: chatgpt, groq, gemini, ollama, lmstudio")
+		configFile   = flag.String("config", "", "Path to YAML config file (auto-loads .i18n-translator.yaml/.yml when omitted)")
+		dryRun       = flag.Bool("dry-run", false, "Preview translation jobs without writing files")
+		listFiles    = flag.Bool("list-files", false, "Print planned source/target files and exit")
+		skipExisting = flag.Bool("skip-existing", false, "Skip jobs whose target file already exists")
+		help         = flag.Bool("help", false, "Show help message")
+		version      = flag.Bool("version", false, "Show version")
 	)
 
 	flag.Usage = func() {
@@ -159,8 +212,9 @@ func main() {
 		fmt.Fprintf(os.Stderr, "  %s --service=ollama --model=llama3.2 --to=ru,es\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "  %s --service=lmstudio --model=your-model --to=ru,es\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "  %s --config=.i18n-translator.yaml --to=ru,es\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "  %s --dry-run --skip-existing --to=ru,es\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "\nEnvironment variable fallbacks:\n")
-		fmt.Fprintf(os.Stderr, "  I18N_SERVICE, I18N_API_KEY, I18N_MODEL, I18N_URL, I18N_FROM, I18N_TO, I18N_SOURCE, I18N_TARGET, I18N_CONCURRENCY, I18N_CONFIG\n")
+		fmt.Fprintf(os.Stderr, "  I18N_SERVICE, I18N_API_KEY, I18N_MODEL, I18N_URL, I18N_FROM, I18N_TO, I18N_SOURCE, I18N_TARGET, I18N_CONCURRENCY, I18N_CONFIG, I18N_DRY_RUN, I18N_LIST_FILES, I18N_SKIP_EXISTING\n")
 	}
 
 	flag.Parse()
@@ -201,16 +255,54 @@ func main() {
 	finalTargetLang := resolveStringOption("to", *targetLang, os.Getenv("I18N_TO"), cfg.To, defaultTargetLang, explicitFlags)
 	finalAPIKey := resolveStringOption("api-key", *apiKey, os.Getenv("I18N_API_KEY"), cfg.apiKey(), "", explicitFlags)
 	finalURL := resolveStringOption("url", *url, os.Getenv("I18N_URL"), cfg.URL, "", explicitFlags)
+	finalDryRun, err := resolveBoolOption("dry-run", *dryRun, os.Getenv("I18N_DRY_RUN"), cfg.DryRun, false, explicitFlags)
+	if err != nil {
+		log.Fatalf("Failed to resolve dry-run: %v", err)
+	}
+	finalListFiles, err := resolveBoolOption("list-files", *listFiles, os.Getenv("I18N_LIST_FILES"), cfg.ListFiles, false, explicitFlags)
+	if err != nil {
+		log.Fatalf("Failed to resolve list-files: %v", err)
+	}
+	finalSkipExisting, err := resolveBoolOption("skip-existing", *skipExisting, os.Getenv("I18N_SKIP_EXISTING"), cfg.SkipExisting, false, explicitFlags)
+	if err != nil {
+		log.Fatalf("Failed to resolve skip-existing: %v", err)
+	}
+
+	if _, err := os.Stat(finalSourceDir); os.IsNotExist(err) {
+		log.Fatalf("Source directory does not exist: %s", finalSourceDir)
+	}
+
+	jobs, err := buildJobs(finalSourceDir, finalTargetDir, finalTargetLang)
+	if err != nil {
+		log.Fatalf("Failed to build jobs: %v", err)
+	}
+	jobs, skippedExistingCount := filterJobsByExisting(jobs, finalSkipExisting)
+	if finalSkipExisting && skippedExistingCount > 0 {
+		fmt.Printf("Skipping %d existing target files due to --skip-existing\n", skippedExistingCount)
+	}
+
+	if finalListFiles || finalDryRun {
+		if finalListFiles {
+			fmt.Println("Planned translation jobs:")
+		}
+		if finalDryRun {
+			fmt.Println("Dry run mode: no files will be written.")
+		}
+		printPlannedJobs(jobs, finalSourceLang)
+		fmt.Printf("Total jobs: %d\n", len(jobs))
+		return
+	}
+
+	if len(jobs) == 0 {
+		fmt.Println("No translation jobs to run.")
+		return
+	}
 
 	needsAPIKey := finalService == "chatgpt" || finalService == "groq" || finalService == "gemini"
 	if needsAPIKey && finalAPIKey == "" {
 		fmt.Fprintf(os.Stderr, "Error: --api-key is required for %s service\n\n", finalService)
 		flag.Usage()
 		os.Exit(1)
-	}
-
-	if _, err := os.Stat(finalSourceDir); os.IsNotExist(err) {
-		log.Fatalf("Source directory does not exist: %s", finalSourceDir)
 	}
 
 	var translationService TranslationService
@@ -254,10 +346,6 @@ func main() {
 	fmt.Printf("Source directory: %s\n", finalSourceDir)
 	fmt.Printf("Target directory: %s\n", finalTargetDir)
 
-	jobs, err := buildJobs(finalSourceDir, finalTargetDir, finalTargetLang)
-	if err != nil {
-		log.Fatalf("Failed to build jobs: %v", err)
-	}
 	if err := runJobs(translator, jobs, finalSourceLang, finalConcurrency); err != nil {
 		log.Fatalf("Error during translation: %v", err)
 	}

@@ -153,6 +153,16 @@ i18n-ai-translator \
 i18n-ai-translator --config=.i18n-translator.yaml
 ```
 
+**Dry run with existing-file skip:**
+```bash
+i18n-ai-translator --dry-run --skip-existing --to=ru,es
+```
+
+**List planned files only:**
+```bash
+i18n-ai-translator --list-files --to=ru,es
+```
+
 Example file in repository: `.i18n-translator.example.yaml`.
 
 ## 🔧 Command-line options
@@ -169,6 +179,9 @@ Example file in repository: `.i18n-translator.example.yaml`.
 | `--target` | Target directory for translations | `./locales` |
 | `--concurrency` | Number of concurrent workers | `4` |
 | `--config` | Path to YAML config file | auto-load `.i18n-translator.yaml/.yml` |
+| `--dry-run` | Preview jobs without writing translated files | `false` |
+| `--list-files` | Print planned source/target jobs and exit | `false` |
+| `--skip-existing` | Skip jobs if target file already exists | `false` |
 | `--help` | Show help message | - |
 | `--version` | Show version | - |
 
@@ -181,7 +194,7 @@ Parameters are resolved in this order:
 4. Built-in defaults
 
 Supported environment variables:
-`I18N_SERVICE`, `I18N_API_KEY`, `I18N_MODEL`, `I18N_URL`, `I18N_FROM`, `I18N_TO`, `I18N_SOURCE`, `I18N_TARGET`, `I18N_CONCURRENCY`, `I18N_CONFIG`.
+`I18N_SERVICE`, `I18N_API_KEY`, `I18N_MODEL`, `I18N_URL`, `I18N_FROM`, `I18N_TO`, `I18N_SOURCE`, `I18N_TARGET`, `I18N_CONCURRENCY`, `I18N_CONFIG`, `I18N_DRY_RUN`, `I18N_LIST_FILES`, `I18N_SKIP_EXISTING`.
 
 Example config file (`.i18n-translator.yaml`):
 ```yaml
@@ -192,6 +205,9 @@ to: ru,es,fr
 source: ./locales/en
 target: ./locales
 concurrency: 6
+dry_run: false
+list_files: false
+skip_existing: false
 ```
 
 You can start from `.i18n-translator.example.yaml` and copy it to `.i18n-translator.yaml`.
