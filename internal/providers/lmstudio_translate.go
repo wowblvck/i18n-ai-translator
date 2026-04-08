@@ -2,6 +2,7 @@ package providers
 
 import (
 	"strings"
+	"time"
 
 	openai "github.com/sashabaranov/go-openai"
 )
@@ -11,12 +12,13 @@ type LMStudioService struct {
 	model  string
 }
 
-func LMStudioProvider(baseURL, model string) (*LMStudioService, error) {
+func LMStudioProvider(baseURL, model string, timeout time.Duration) (*LMStudioService, error) {
 	if strings.TrimSpace(baseURL) == "" {
 		baseURL = "http://localhost:1234/v1"
 	}
 	config := openai.DefaultConfig("lm-studio")
 	config.BaseURL = baseURL
+	applyHTTPTimeout(&config, timeout)
 	return &LMStudioService{
 		client: openai.NewClientWithConfig(config),
 		model:  model,

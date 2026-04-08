@@ -3,6 +3,7 @@ package providers
 import (
 	"errors"
 	"strings"
+	"time"
 
 	openai "github.com/sashabaranov/go-openai"
 )
@@ -12,15 +13,17 @@ type ChatGPTService struct {
 	model  string
 }
 
-func ChatGPTProvider(apiKey string, model string) (*ChatGPTService, error) {
+func ChatGPTProvider(apiKey string, model string, timeout time.Duration) (*ChatGPTService, error) {
 	if apiKey == "" {
 		return nil, errors.New("chatgpt api key is required")
 	}
 	if strings.TrimSpace(model) == "" {
 		model = "gpt-4o-mini"
 	}
+	config := openai.DefaultConfig(apiKey)
+	applyHTTPTimeout(&config, timeout)
 	return &ChatGPTService{
-		client: openai.NewClient(apiKey),
+		client: openai.NewClientWithConfig(config),
 		model:  model,
 	}, nil
 }

@@ -2,6 +2,7 @@ package providers
 
 import (
 	"strings"
+	"time"
 
 	openai "github.com/sashabaranov/go-openai"
 )
@@ -11,7 +12,7 @@ type OllamaService struct {
 	model  string
 }
 
-func OllamaProvider(baseURL, model string) (*OllamaService, error) {
+func OllamaProvider(baseURL, model string, timeout time.Duration) (*OllamaService, error) {
 	if strings.TrimSpace(baseURL) == "" {
 		baseURL = "http://localhost:11434/v1"
 	}
@@ -20,6 +21,7 @@ func OllamaProvider(baseURL, model string) (*OllamaService, error) {
 	}
 	config := openai.DefaultConfig("ollama")
 	config.BaseURL = baseURL
+	applyHTTPTimeout(&config, timeout)
 	return &OllamaService{
 		client: openai.NewClientWithConfig(config),
 		model:  model,

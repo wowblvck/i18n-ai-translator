@@ -3,6 +3,7 @@ package providers
 import (
 	"errors"
 	"strings"
+	"time"
 
 	openai "github.com/sashabaranov/go-openai"
 )
@@ -12,7 +13,7 @@ type GeminiService struct {
 	model  string
 }
 
-func GeminiProvider(apiKey, model string) (*GeminiService, error) {
+func GeminiProvider(apiKey, model string, timeout time.Duration) (*GeminiService, error) {
 	if apiKey == "" {
 		return nil, errors.New("gemini api key is required")
 	}
@@ -21,6 +22,7 @@ func GeminiProvider(apiKey, model string) (*GeminiService, error) {
 	}
 	config := openai.DefaultConfig(apiKey)
 	config.BaseURL = "https://generativelanguage.googleapis.com/v1beta/openai"
+	applyHTTPTimeout(&config, timeout)
 	return &GeminiService{
 		client: openai.NewClientWithConfig(config),
 		model:  model,

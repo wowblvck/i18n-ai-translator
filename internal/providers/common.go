@@ -5,10 +5,19 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
+	"time"
 
 	openai "github.com/sashabaranov/go-openai"
 )
+
+func applyHTTPTimeout(config *openai.ClientConfig, timeout time.Duration) {
+	if timeout <= 0 {
+		return
+	}
+	config.HTTPClient = &http.Client{Timeout: timeout}
+}
 
 type translateItem struct {
 	Original   string `json:"original"`

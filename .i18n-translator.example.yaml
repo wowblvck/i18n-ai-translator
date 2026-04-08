@@ -13,3 +13,6 @@ concurrency: 6
 dry_run: false
 list_files: false
 skip_existing: false
+retries: 2
+retry_delay: 1s
+timeout: 60s

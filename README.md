@@ -163,6 +163,11 @@ i18n-ai-translator --dry-run --skip-existing --to=ru,es
 i18n-ai-translator --list-files --to=ru,es
 ```
 
+**Retries and timeout for unstable API responses:**
+```bash
+i18n-ai-translator --retries=3 --retry-delay=2s --timeout=60s --to=ru,es
+```
+
 Example file in repository: `.i18n-translator.example.yaml`.
 
 ## 🔧 Command-line options
@@ -182,6 +187,9 @@ Example file in repository: `.i18n-translator.example.yaml`.
 | `--dry-run` | Preview jobs without writing translated files | `false` |
 | `--list-files` | Print planned source/target jobs and exit | `false` |
 | `--skip-existing` | Skip jobs if target file already exists | `false` |
+| `--retries` | Retries for temporary provider errors (429/5xx/timeout) | `0` |
+| `--retry-delay` | Base delay between retries (`time.Duration`) | `1s` |
+| `--timeout` | Per-request provider timeout (`time.Duration`), `0` disables | `0s` |
 | `--help` | Show help message | - |
 | `--version` | Show version | - |
 
@@ -194,7 +202,7 @@ Parameters are resolved in this order:
 4. Built-in defaults
 
 Supported environment variables:
-`I18N_SERVICE`, `I18N_API_KEY`, `I18N_MODEL`, `I18N_URL`, `I18N_FROM`, `I18N_TO`, `I18N_SOURCE`, `I18N_TARGET`, `I18N_CONCURRENCY`, `I18N_CONFIG`, `I18N_DRY_RUN`, `I18N_LIST_FILES`, `I18N_SKIP_EXISTING`.
+`I18N_SERVICE`, `I18N_API_KEY`, `I18N_MODEL`, `I18N_URL`, `I18N_FROM`, `I18N_TO`, `I18N_SOURCE`, `I18N_TARGET`, `I18N_CONCURRENCY`, `I18N_CONFIG`, `I18N_DRY_RUN`, `I18N_LIST_FILES`, `I18N_SKIP_EXISTING`, `I18N_RETRIES`, `I18N_RETRY_DELAY`, `I18N_TIMEOUT`.
 
 Example config file (`.i18n-translator.yaml`):
 ```yaml
@@ -208,6 +216,9 @@ concurrency: 6
 dry_run: false
 list_files: false
 skip_existing: false
+retries: 2
+retry_delay: 1s
+timeout: 60s
 ```
 
 You can start from `.i18n-translator.example.yaml` and copy it to `.i18n-translator.yaml`.

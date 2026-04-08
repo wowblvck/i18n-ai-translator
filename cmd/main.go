@@ -1,27 +1,37 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"log"
+	"net"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/sashabaranov/go-openai"
 	"github.com/wowblvck/i18n-translator/internal/providers"
 )
 
 const (
 	defaultConcurrency = 4
+	defaultRetries     = 0
 	defaultService     = "chatgpt"
 	defaultSourceDir   = "./locales/en"
 	defaultTargetDir   = "./locales"
 	defaultSourceLang  = "en"
 	defaultTargetLang  = "es,fr,de"
+)
+
+var (
+	defaultRetryDelay = time.Second
+	defaultTimeout    time.Duration
 )
 
 type TranslationService interface {
@@ -41,6 +51,11 @@ type translateJob struct {
 	lang       string
 }
 
+type runOptions struct {
+	retries    int
+	retryDelay time.Duration
+}
+
 type appConfig struct {
 	Service      string `yaml:"service"`
 	Model        string `yaml:"model"`
@@ -55,6 +70,9 @@ type appConfig struct {
 	DryRun       bool   `yaml:"dry_run"`
 	ListFiles    bool   `yaml:"list_files"`
 	SkipExisting bool   `yaml:"skip_existing"`
+	Retries      int    `yaml:"retries"`
+	RetryDelay   string `yaml:"retry_delay"`
+	Timeout      string `yaml:"timeout"`
 }
 
 func (c appConfig) apiKey() string {
@@ -114,7 +132,7 @@ func resolveStringOption(flagName, flagValue, envValue, configValue, defaultValu
 	return defaultValue
 }
 
-func resolveIntOption(flagName string, flagValue int, envValue string, configValue, defaultValue int, explicitFlags map[string]bool) (int, error) {
+func resolveIntOption(flagName, envName string, flagValue int, envValue string, configValue, defaultValue int, explicitFlags map[string]bool) (int, error) {
 	if explicitFlags[flagName] {
 		return flagValue, nil
 	}
@@ -122,13 +140,37 @@ func resolveIntOption(flagName string, flagValue int, envValue string, configVal
 	if env := strings.TrimSpace(envValue); env != "" {
 		v, err := strconv.Atoi(env)
 		if err != nil {
-			return 0, fmt.Errorf("I18N_CONCURRENCY must be a valid integer: %w", err)
+			return 0, fmt.Errorf("%s must be a valid integer: %w", envName, err)
 		}
 		return v, nil
 	}
 
 	if configValue != 0 {
 		return configValue, nil
+	}
+
+	return defaultValue, nil
+}
+
+func resolveDurationOption(flagName, envName string, flagValue time.Duration, envValue, configValue string, defaultValue time.Duration, explicitFlags map[string]bool) (time.Duration, error) {
+	if explicitFlags[flagName] {
+		return flagValue, nil
+	}
+
+	if env := strings.TrimSpace(envValue); env != "" {
+		v, err := time.ParseDuration(env)
+		if err != nil {
+			return 0, fmt.Errorf("%s must be a valid duration: %w", envName, err)
+		}
+		return v, nil
+	}
+
+	if cfg := strings.TrimSpace(configValue); cfg != "" {
+		v, err := time.ParseDuration(cfg)
+		if err != nil {
+			return 0, fmt.Errorf("config field for %s must be a valid duration: %w", flagName, err)
+		}
+		return v, nil
 	}
 
 	return defaultValue, nil
@@ -181,6 +223,45 @@ func printPlannedJobs(jobs []translateJob, sourceLang string) {
 	}
 }
 
+func shouldRetry(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	var apiErr *openai.APIError
+	if errors.As(err, &apiErr) {
+		if apiErr.HTTPStatusCode == 429 || apiErr.HTTPStatusCode >= 500 {
+			return true
+		}
+	}
+
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return true
+	}
+
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "timeout") || strings.Contains(msg, "tempor") || strings.Contains(msg, "connection reset")
+}
+
+func retryDelayForAttempt(baseDelay time.Duration, attempt int) time.Duration {
+	if baseDelay <= 0 {
+		return 0
+	}
+	if attempt <= 1 {
+		return baseDelay
+	}
+
+	delay := baseDelay
+	for i := 1; i < attempt; i++ {
+		if delay > 30*time.Second/2 {
+			return 30 * time.Second
+		}
+		delay *= 2
+	}
+	return delay
+}
+
 func main() {
 	var (
 		concurrency  = flag.Int("concurrency", defaultConcurrency, "Number of parallel workers")
@@ -196,6 +277,9 @@ func main() {
 		dryRun       = flag.Bool("dry-run", false, "Preview translation jobs without writing files")
 		listFiles    = flag.Bool("list-files", false, "Print planned source/target files and exit")
 		skipExisting = flag.Bool("skip-existing", false, "Skip jobs whose target file already exists")
+		retries      = flag.Int("retries", defaultRetries, "Retry count for temporary provider errors (429/5xx/timeout)")
+		retryDelay   = flag.Duration("retry-delay", defaultRetryDelay, "Base delay between retries (e.g., 500ms, 1s, 2s)")
+		timeout      = flag.Duration("timeout", defaultTimeout, "Per-request timeout for provider API calls (e.g., 30s, 2m). 0 disables timeout")
 		help         = flag.Bool("help", false, "Show help message")
 		version      = flag.Bool("version", false, "Show version")
 	)
@@ -213,8 +297,9 @@ func main() {
 		fmt.Fprintf(os.Stderr, "  %s --service=lmstudio --model=your-model --to=ru,es\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "  %s --config=.i18n-translator.yaml --to=ru,es\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "  %s --dry-run --skip-existing --to=ru,es\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "  %s --retries=3 --retry-delay=2s --timeout=60s --to=ru,es\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "\nEnvironment variable fallbacks:\n")
-		fmt.Fprintf(os.Stderr, "  I18N_SERVICE, I18N_API_KEY, I18N_MODEL, I18N_URL, I18N_FROM, I18N_TO, I18N_SOURCE, I18N_TARGET, I18N_CONCURRENCY, I18N_CONFIG, I18N_DRY_RUN, I18N_LIST_FILES, I18N_SKIP_EXISTING\n")
+		fmt.Fprintf(os.Stderr, "  I18N_SERVICE, I18N_API_KEY, I18N_MODEL, I18N_URL, I18N_FROM, I18N_TO, I18N_SOURCE, I18N_TARGET, I18N_CONCURRENCY, I18N_CONFIG, I18N_DRY_RUN, I18N_LIST_FILES, I18N_SKIP_EXISTING, I18N_RETRIES, I18N_RETRY_DELAY, I18N_TIMEOUT\n")
 	}
 
 	flag.Parse()
@@ -239,12 +324,33 @@ func main() {
 		fmt.Printf("Using config file: %s\n", loadedConfigPath)
 	}
 
-	finalConcurrency, err := resolveIntOption("concurrency", *concurrency, os.Getenv("I18N_CONCURRENCY"), cfg.Concurrency, defaultConcurrency, explicitFlags)
+	finalConcurrency, err := resolveIntOption("concurrency", "I18N_CONCURRENCY", *concurrency, os.Getenv("I18N_CONCURRENCY"), cfg.Concurrency, defaultConcurrency, explicitFlags)
 	if err != nil {
 		log.Fatalf("Failed to resolve concurrency: %v", err)
 	}
 	if finalConcurrency < 1 {
 		log.Fatalf("concurrency must be greater than 0")
+	}
+	finalRetries, err := resolveIntOption("retries", "I18N_RETRIES", *retries, os.Getenv("I18N_RETRIES"), cfg.Retries, defaultRetries, explicitFlags)
+	if err != nil {
+		log.Fatalf("Failed to resolve retries: %v", err)
+	}
+	if finalRetries < 0 {
+		log.Fatalf("retries must be greater than or equal to 0")
+	}
+	finalRetryDelay, err := resolveDurationOption("retry-delay", "I18N_RETRY_DELAY", *retryDelay, os.Getenv("I18N_RETRY_DELAY"), cfg.RetryDelay, defaultRetryDelay, explicitFlags)
+	if err != nil {
+		log.Fatalf("Failed to resolve retry-delay: %v", err)
+	}
+	if finalRetryDelay < 0 {
+		log.Fatalf("retry-delay must be greater than or equal to 0")
+	}
+	finalTimeout, err := resolveDurationOption("timeout", "I18N_TIMEOUT", *timeout, os.Getenv("I18N_TIMEOUT"), cfg.Timeout, defaultTimeout, explicitFlags)
+	if err != nil {
+		log.Fatalf("Failed to resolve timeout: %v", err)
+	}
+	if finalTimeout < 0 {
+		log.Fatalf("timeout must be greater than or equal to 0")
 	}
 
 	finalService := resolveStringOption("service", *service, os.Getenv("I18N_SERVICE"), cfg.Service, defaultService, explicitFlags)
@@ -308,27 +414,27 @@ func main() {
 	var translationService TranslationService
 	switch finalService {
 	case "chatgpt":
-		translationService, err = providers.ChatGPTProvider(finalAPIKey, finalModel)
+		translationService, err = providers.ChatGPTProvider(finalAPIKey, finalModel, finalTimeout)
 		if err != nil {
 			log.Fatalf("Failed to initialize ChatGPT service: %v", err)
 		}
 	case "groq":
-		translationService, err = providers.GroqProvider(finalAPIKey, finalModel)
+		translationService, err = providers.GroqProvider(finalAPIKey, finalModel, finalTimeout)
 		if err != nil {
 			log.Fatalf("Failed to initialize Groq service: %v", err)
 		}
 	case "gemini":
-		translationService, err = providers.GeminiProvider(finalAPIKey, finalModel)
+		translationService, err = providers.GeminiProvider(finalAPIKey, finalModel, finalTimeout)
 		if err != nil {
 			log.Fatalf("Failed to initialize Gemini service: %v", err)
 		}
 	case "ollama":
-		translationService, err = providers.OllamaProvider(finalURL, finalModel)
+		translationService, err = providers.OllamaProvider(finalURL, finalModel, finalTimeout)
 		if err != nil {
 			log.Fatalf("Failed to initialize Ollama service: %v", err)
 		}
 	case "lmstudio":
-		translationService, err = providers.LMStudioProvider(finalURL, finalModel)
+		translationService, err = providers.LMStudioProvider(finalURL, finalModel, finalTimeout)
 		if err != nil {
 			log.Fatalf("Failed to initialize LM Studio service: %v", err)
 		}
@@ -346,7 +452,10 @@ func main() {
 	fmt.Printf("Source directory: %s\n", finalSourceDir)
 	fmt.Printf("Target directory: %s\n", finalTargetDir)
 
-	if err := runJobs(translator, jobs, finalSourceLang, finalConcurrency); err != nil {
+	if err := runJobs(translator, jobs, finalSourceLang, finalConcurrency, runOptions{
+		retries:    finalRetries,
+		retryDelay: finalRetryDelay,
+	}); err != nil {
 		log.Fatalf("Error during translation: %v", err)
 	}
 
@@ -356,12 +465,12 @@ func main() {
 func (t *I18nTranslator) TranslateFile(sourceFile, targetFile, sourceLang, targetLang string) error {
 	data, err := os.ReadFile(sourceFile)
 	if err != nil {
-		return fmt.Errorf("failed to read source file: %v", err)
+		return fmt.Errorf("failed to read source file: %w", err)
 	}
 
 	translatedJSON, err := t.service.Translate(string(data), sourceLang, targetLang)
 	if err != nil {
-		return fmt.Errorf("failed to translate content: %v", err)
+		return fmt.Errorf("failed to translate content: %w", err)
 	}
 
 	return os.WriteFile(targetFile, []byte(strings.TrimSpace(translatedJSON)), 0644)
@@ -427,7 +536,7 @@ func buildJobs(sourceDir, targetDir, languages string) ([]translateJob, error) {
 	return jobs, nil
 }
 
-func runJobs(translator *I18nTranslator, jobs []translateJob, sourceLang string, concurrency int) error {
+func runJobs(translator *I18nTranslator, jobs []translateJob, sourceLang string, concurrency int, opts runOptions) error {
 	jobCh := make(chan translateJob)
 	var wg sync.WaitGroup
 
@@ -439,7 +548,26 @@ func runJobs(translator *I18nTranslator, jobs []translateJob, sourceLang string,
 					continue
 				}
 				fmt.Printf("Translating %s to %s...\n", job.relPath, job.lang)
-				if err := translator.TranslateFile(job.sourcePath, job.targetPath, sourceLang, job.lang); err != nil {
+
+				var err error
+				attempts := opts.retries + 1
+				for attempt := 1; attempt <= attempts; attempt++ {
+					err = translator.TranslateFile(job.sourcePath, job.targetPath, sourceLang, job.lang)
+					if err == nil {
+						break
+					}
+					if attempt == attempts || !shouldRetry(err) {
+						break
+					}
+
+					delay := retryDelayForAttempt(opts.retryDelay, attempt)
+					log.Printf("Retrying %s to %s (%d/%d) after %s: %v", job.relPath, job.lang, attempt+1, attempts, delay, err)
+					if delay > 0 {
+						time.Sleep(delay)
+					}
+				}
+
+				if err != nil {
 					log.Printf("Error translating %s to %s: %v", job.sourcePath, job.lang, err)
 					continue
 				}
