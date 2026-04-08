@@ -71,7 +71,7 @@ func runTranslateCommand(binaryName string, args []string) int {
 	}
 
 	if *version {
-		fmt.Println("i18n-translator v1.0.0")
+		fmt.Printf("i18n-translator %s\n", appVersion())
 		return 0
 	}
 

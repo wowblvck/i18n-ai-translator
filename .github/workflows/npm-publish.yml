@@ -42,7 +42,12 @@ jobs:
       - name: Build ${{ matrix.goos }}-${{ matrix.goarch }}
         run: |
           mkdir -p dist
-          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -o dist/${{ matrix.out }} ./cmd/main.go
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            VERSION="${GITHUB_REF_NAME}"
+          else
+            VERSION="dev"
+          fi
+          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -ldflags "-X github.com/wowblvck/i18n-translator/internal/cli.Version=${VERSION}" -o dist/${{ matrix.out }} ./cmd/main.go
           ls -la dist
 
       - name: Upload artifact ${{ matrix.out }}
