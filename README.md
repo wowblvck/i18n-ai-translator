@@ -168,6 +168,11 @@ i18n-ai-translator --list-files --to=ru,es
 i18n-ai-translator --retries=3 --retry-delay=2s --timeout=60s --to=ru,es
 ```
 
+**Fail fast (stop on first error):**
+```bash
+i18n-ai-translator --fail-fast --retries=1 --to=ru,es
+```
+
 Example file in repository: `.i18n-translator.example.yaml`.
 
 ## 🔧 Command-line options
@@ -187,6 +192,7 @@ Example file in repository: `.i18n-translator.example.yaml`.
 | `--dry-run` | Preview jobs without writing translated files | `false` |
 | `--list-files` | Print planned source/target jobs and exit | `false` |
 | `--skip-existing` | Skip jobs if target file already exists | `false` |
+| `--fail-fast` | Stop scheduling new jobs after first translation error | `false` |
 | `--retries` | Retries for temporary provider errors (429/5xx/timeout) | `0` |
 | `--retry-delay` | Base delay between retries (`time.Duration`) | `1s` |
 | `--timeout` | Per-request provider timeout (`time.Duration`), `0` disables | `0s` |
@@ -202,7 +208,7 @@ Parameters are resolved in this order:
 4. Built-in defaults
 
 Supported environment variables:
-`I18N_SERVICE`, `I18N_API_KEY`, `I18N_MODEL`, `I18N_URL`, `I18N_FROM`, `I18N_TO`, `I18N_SOURCE`, `I18N_TARGET`, `I18N_CONCURRENCY`, `I18N_CONFIG`, `I18N_DRY_RUN`, `I18N_LIST_FILES`, `I18N_SKIP_EXISTING`, `I18N_RETRIES`, `I18N_RETRY_DELAY`, `I18N_TIMEOUT`.
+`I18N_SERVICE`, `I18N_API_KEY`, `I18N_MODEL`, `I18N_URL`, `I18N_FROM`, `I18N_TO`, `I18N_SOURCE`, `I18N_TARGET`, `I18N_CONCURRENCY`, `I18N_CONFIG`, `I18N_DRY_RUN`, `I18N_LIST_FILES`, `I18N_SKIP_EXISTING`, `I18N_FAIL_FAST`, `I18N_RETRIES`, `I18N_RETRY_DELAY`, `I18N_TIMEOUT`.
 
 Example config file (`.i18n-translator.yaml`):
 ```yaml
@@ -216,6 +222,7 @@ concurrency: 6
 dry_run: false
 list_files: false
 skip_existing: false
+fail_fast: false
 retries: 2
 retry_delay: 1s
 timeout: 60s
@@ -226,6 +233,7 @@ You can start from `.i18n-translator.example.yaml` and copy it to `.i18n-transla
 ### Exit codes and summary
 
 At the end of each run, the CLI prints a summary with `Total`, `Succeeded`, `Failed`, `Skipped`, and `Retried`.
+When `--fail-fast` is enabled, summary also shows whether fail-fast was triggered and the first error that caused stop.
 
 - Exit code `0`: all scheduled jobs finished successfully.
 - Exit code `1`: one or more jobs failed.

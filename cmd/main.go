@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -55,14 +56,17 @@ type translateJob struct {
 type runOptions struct {
 	retries    int
 	retryDelay time.Duration
+	failFast   bool
 }
 
 type runStats struct {
-	Total     int
-	Succeeded int
-	Failed    int
-	Skipped   int
-	Retried   int
+	Total              int
+	Succeeded          int
+	Failed             int
+	Skipped            int
+	Retried            int
+	FailFastTriggered  bool
+	FailFastFirstError string
 }
 
 type appConfig struct {
@@ -79,6 +83,7 @@ type appConfig struct {
 	DryRun       bool   `yaml:"dry_run"`
 	ListFiles    bool   `yaml:"list_files"`
 	SkipExisting bool   `yaml:"skip_existing"`
+	FailFast     bool   `yaml:"fail_fast"`
 	Retries      int    `yaml:"retries"`
 	RetryDelay   string `yaml:"retry_delay"`
 	Timeout      string `yaml:"timeout"`
@@ -239,6 +244,10 @@ func printRunSummary(stats runStats) {
 	fmt.Printf("  Failed: %d\n", stats.Failed)
 	fmt.Printf("  Skipped: %d\n", stats.Skipped)
 	fmt.Printf("  Retried: %d\n", stats.Retried)
+	fmt.Printf("  Fail-fast triggered: %t\n", stats.FailFastTriggered)
+	if stats.FailFastFirstError != "" {
+		fmt.Printf("  First fail-fast error: %s\n", stats.FailFastFirstError)
+	}
 }
 
 func shouldRetry(err error) bool {
@@ -295,6 +304,7 @@ func main() {
 		dryRun       = flag.Bool("dry-run", false, "Preview translation jobs without writing files")
 		listFiles    = flag.Bool("list-files", false, "Print planned source/target files and exit")
 		skipExisting = flag.Bool("skip-existing", false, "Skip jobs whose target file already exists")
+		failFast     = flag.Bool("fail-fast", false, "Stop processing new jobs after first translation error")
 		retries      = flag.Int("retries", defaultRetries, "Retry count for temporary provider errors (429/5xx/timeout)")
 		retryDelay   = flag.Duration("retry-delay", defaultRetryDelay, "Base delay between retries (e.g., 500ms, 1s, 2s)")
 		timeout      = flag.Duration("timeout", defaultTimeout, "Per-request timeout for provider API calls (e.g., 30s, 2m). 0 disables timeout")
@@ -315,9 +325,10 @@ func main() {
 		fmt.Fprintf(os.Stderr, "  %s --service=lmstudio --model=your-model --to=ru,es\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "  %s --config=.i18n-translator.yaml --to=ru,es\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "  %s --dry-run --skip-existing --to=ru,es\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "  %s --fail-fast --retries=1 --to=ru,es\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "  %s --retries=3 --retry-delay=2s --timeout=60s --to=ru,es\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "\nEnvironment variable fallbacks:\n")
-		fmt.Fprintf(os.Stderr, "  I18N_SERVICE, I18N_API_KEY, I18N_MODEL, I18N_URL, I18N_FROM, I18N_TO, I18N_SOURCE, I18N_TARGET, I18N_CONCURRENCY, I18N_CONFIG, I18N_DRY_RUN, I18N_LIST_FILES, I18N_SKIP_EXISTING, I18N_RETRIES, I18N_RETRY_DELAY, I18N_TIMEOUT\n")
+		fmt.Fprintf(os.Stderr, "  I18N_SERVICE, I18N_API_KEY, I18N_MODEL, I18N_URL, I18N_FROM, I18N_TO, I18N_SOURCE, I18N_TARGET, I18N_CONCURRENCY, I18N_CONFIG, I18N_DRY_RUN, I18N_LIST_FILES, I18N_SKIP_EXISTING, I18N_FAIL_FAST, I18N_RETRIES, I18N_RETRY_DELAY, I18N_TIMEOUT\n")
 	}
 
 	flag.Parse()
@@ -390,6 +401,10 @@ func main() {
 	finalSkipExisting, err := resolveBoolOption("skip-existing", *skipExisting, os.Getenv("I18N_SKIP_EXISTING"), cfg.SkipExisting, false, explicitFlags)
 	if err != nil {
 		log.Fatalf("Failed to resolve skip-existing: %v", err)
+	}
+	finalFailFast, err := resolveBoolOption("fail-fast", *failFast, os.Getenv("I18N_FAIL_FAST"), cfg.FailFast, false, explicitFlags)
+	if err != nil {
+		log.Fatalf("Failed to resolve fail-fast: %v", err)
 	}
 
 	if _, err := os.Stat(finalSourceDir); os.IsNotExist(err) {
@@ -476,11 +491,15 @@ func main() {
 	runResult := runJobs(translator, jobs, finalSourceLang, finalConcurrency, runOptions{
 		retries:    finalRetries,
 		retryDelay: finalRetryDelay,
+		failFast:   finalFailFast,
 	})
 
 	summary.Succeeded = runResult.Succeeded
 	summary.Failed = runResult.Failed
+	summary.Skipped += runResult.Skipped
 	summary.Retried = runResult.Retried
+	summary.FailFastTriggered = runResult.FailFastTriggered
+	summary.FailFastFirstError = runResult.FailFastFirstError
 	printRunSummary(summary)
 
 	if summary.Failed > 0 {
@@ -565,18 +584,48 @@ func buildJobs(sourceDir, targetDir, languages string) ([]translateJob, error) {
 }
 
 func runJobs(translator *I18nTranslator, jobs []translateJob, sourceLang string, concurrency int, opts runOptions) runStats {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	jobCh := make(chan translateJob)
 	var wg sync.WaitGroup
 	var succeededCount atomic.Int64
 	var failedCount atomic.Int64
+	var skippedCount atomic.Int64
 	var retriedCount atomic.Int64
+	var failFastTriggered atomic.Bool
+	var failFastErr atomic.Value
+	var failFastOnce sync.Once
+
+	triggerFailFast := func(err error) {
+		if !opts.failFast || err == nil {
+			return
+		}
+		failFastOnce.Do(func() {
+			failFastTriggered.Store(true)
+			failFastErr.Store(err.Error())
+			cancel()
+		})
+	}
 
 	for range concurrency {
 		wg.Go(func() {
-			for job := range jobCh {
+			for {
+				var job translateJob
+				var ok bool
+				select {
+				case <-ctx.Done():
+					return
+				case job, ok = <-jobCh:
+					if !ok {
+						return
+					}
+				}
+
 				if err := os.MkdirAll(filepath.Dir(job.targetPath), 0755); err != nil {
 					log.Printf("Failed to create directory %s: %v", filepath.Dir(job.targetPath), err)
 					failedCount.Add(1)
+					triggerFailFast(err)
 					continue
 				}
 				fmt.Printf("Translating %s to %s...\n", job.relPath, job.lang)
@@ -608,6 +657,7 @@ func runJobs(translator *I18nTranslator, jobs []translateJob, sourceLang string,
 				if err != nil {
 					log.Printf("Error translating %s to %s: %v", job.sourcePath, job.lang, err)
 					failedCount.Add(1)
+					triggerFailFast(err)
 					continue
 				}
 				fmt.Printf("✓ Successfully translated %s to %s\n", job.relPath, job.lang)
@@ -617,16 +667,33 @@ func runJobs(translator *I18nTranslator, jobs []translateJob, sourceLang string,
 	}
 
 	go func() {
-		for _, j := range jobs {
-			jobCh <- j
+		for idx, j := range jobs {
+			select {
+			case <-ctx.Done():
+				skippedCount.Add(int64(len(jobs) - idx))
+				close(jobCh)
+				return
+			case jobCh <- j:
+			}
 		}
 		close(jobCh)
 	}()
 
 	wg.Wait()
+
+	firstError := ""
+	if raw := failFastErr.Load(); raw != nil {
+		if msg, ok := raw.(string); ok {
+			firstError = msg
+		}
+	}
+
 	return runStats{
-		Succeeded: int(succeededCount.Load()),
-		Failed:    int(failedCount.Load()),
-		Retried:   int(retriedCount.Load()),
+		Succeeded:          int(succeededCount.Load()),
+		Failed:             int(failedCount.Load()),
+		Skipped:            int(skippedCount.Load()),
+		Retried:            int(retriedCount.Load()),
+		FailFastTriggered:  failFastTriggered.Load(),
+		FailFastFirstError: firstError,
 	}
 }
