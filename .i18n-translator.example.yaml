@@ -1,0 +1,12 @@
+# Example configuration for i18n-ai-translator.
+# You can copy this file to .i18n-translator.yaml and fill in your values.
+
+service: gemini
+api_key: your-api-key
+model: gemini-2.0-flash
+url: ""
+from: en
+to: ru,es,fr
+source: ./locales/en
+target: ./locales
+concurrency: 6

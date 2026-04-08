@@ -6,10 +6,22 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 
+	"gopkg.in/yaml.v3"
+
 	"github.com/wowblvck/i18n-translator/internal/providers"
+)
+
+const (
+	defaultConcurrency = 4
+	defaultService     = "chatgpt"
+	defaultSourceDir   = "./locales/en"
+	defaultTargetDir   = "./locales"
+	defaultSourceLang  = "en"
+	defaultTargetLang  = "es,fr,de"
 )
 
 type TranslationService interface {
@@ -29,17 +41,108 @@ type translateJob struct {
 	lang       string
 }
 
+type appConfig struct {
+	Service     string `yaml:"service"`
+	Model       string `yaml:"model"`
+	Source      string `yaml:"source"`
+	Target      string `yaml:"target"`
+	From        string `yaml:"from"`
+	To          string `yaml:"to"`
+	APIKey      string `yaml:"api_key"`
+	APIKeyAlt   string `yaml:"api-key"`
+	URL         string `yaml:"url"`
+	Concurrency int    `yaml:"concurrency"`
+}
+
+func (c appConfig) apiKey() string {
+	if strings.TrimSpace(c.APIKey) != "" {
+		return strings.TrimSpace(c.APIKey)
+	}
+	return strings.TrimSpace(c.APIKeyAlt)
+}
+
+func loadConfig(configPath string) (appConfig, string, error) {
+	configPath = strings.TrimSpace(configPath)
+	paths := []string{".i18n-translator.yaml", ".i18n-translator.yml"}
+	if configPath != "" {
+		paths = []string{configPath}
+	}
+
+	for _, path := range paths {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			if os.IsNotExist(err) {
+				if configPath != "" {
+					return appConfig{}, "", fmt.Errorf("config file not found: %s", path)
+				}
+				continue
+			}
+			return appConfig{}, "", fmt.Errorf("failed to read config file %s: %w", path, err)
+		}
+
+		var cfg appConfig
+		if err := yaml.Unmarshal(data, &cfg); err != nil {
+			return appConfig{}, "", fmt.Errorf("failed to parse config file %s: %w", path, err)
+		}
+		return cfg, path, nil
+	}
+
+	return appConfig{}, "", nil
+}
+
+func collectExplicitFlags() map[string]bool {
+	explicit := map[string]bool{}
+	flag.Visit(func(f *flag.Flag) {
+		explicit[f.Name] = true
+	})
+	return explicit
+}
+
+func resolveStringOption(flagName, flagValue, envValue, configValue, defaultValue string, explicitFlags map[string]bool) string {
+	if explicitFlags[flagName] {
+		return flagValue
+	}
+	if env := strings.TrimSpace(envValue); env != "" {
+		return env
+	}
+	if cfg := strings.TrimSpace(configValue); cfg != "" {
+		return cfg
+	}
+	return defaultValue
+}
+
+func resolveIntOption(flagName string, flagValue int, envValue string, configValue, defaultValue int, explicitFlags map[string]bool) (int, error) {
+	if explicitFlags[flagName] {
+		return flagValue, nil
+	}
+
+	if env := strings.TrimSpace(envValue); env != "" {
+		v, err := strconv.Atoi(env)
+		if err != nil {
+			return 0, fmt.Errorf("I18N_CONCURRENCY must be a valid integer: %w", err)
+		}
+		return v, nil
+	}
+
+	if configValue != 0 {
+		return configValue, nil
+	}
+
+	return defaultValue, nil
+}
+
 func main() {
 	var (
-		concurrency = flag.Int("concurrency", 4, "Number of parallel workers")
+		concurrency = flag.Int("concurrency", defaultConcurrency, "Number of parallel workers")
 		model       = flag.String("model", "", "Model name (defaults: chatgpt=gpt-4o-mini, groq=llama-3.3-70b-versatile, gemini=gemini-2.0-flash, ollama=llama3.2)")
-		sourceDir   = flag.String("source", "./locales/en", "Source language directory")
-		targetDir   = flag.String("target", "./locales", "Target directory for translations")
-		sourceLang  = flag.String("from", "en", "Source language code")
-		targetLang  = flag.String("to", "es,fr,de", "Target language codes (comma-separated)")
+		sourceDir   = flag.String("source", defaultSourceDir, "Source language directory")
+		targetDir   = flag.String("target", defaultTargetDir, "Target directory for translations")
+		sourceLang  = flag.String("from", defaultSourceLang, "Source language code")
+		targetLang  = flag.String("to", defaultTargetLang, "Target language codes (comma-separated)")
 		apiKey      = flag.String("api-key", "", "API key (required for chatgpt, groq, and gemini)")
 		url         = flag.String("url", "", "Base URL for ollama or lmstudio (e.g., http://localhost:11434/v1)")
-		service     = flag.String("service", "chatgpt", "Translation service: chatgpt, groq, gemini, ollama, lmstudio")
+		service     = flag.String("service", defaultService, "Translation service: chatgpt, groq, gemini, ollama, lmstudio")
+		configFile  = flag.String("config", "", "Path to YAML config file (auto-loads .i18n-translator.yaml/.yml when omitted)")
 		help        = flag.Bool("help", false, "Show help message")
 		version     = flag.Bool("version", false, "Show version")
 	)
@@ -55,6 +158,9 @@ func main() {
 		fmt.Fprintf(os.Stderr, "  %s --service=gemini --api-key=YOUR_KEY --model=gemini-2.0-flash --to=ru\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "  %s --service=ollama --model=llama3.2 --to=ru,es\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "  %s --service=lmstudio --model=your-model --to=ru,es\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "  %s --config=.i18n-translator.yaml --to=ru,es\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "\nEnvironment variable fallbacks:\n")
+		fmt.Fprintf(os.Stderr, "  I18N_SERVICE, I18N_API_KEY, I18N_MODEL, I18N_URL, I18N_FROM, I18N_TO, I18N_SOURCE, I18N_TARGET, I18N_CONCURRENCY, I18N_CONFIG\n")
 	}
 
 	flag.Parse()
@@ -69,68 +175,90 @@ func main() {
 		return
 	}
 
-	needsAPIKey := *service == "chatgpt" || *service == "groq" || *service == "gemini"
-	if needsAPIKey && *apiKey == "" {
-		fmt.Fprintf(os.Stderr, "Error: --api-key is required for %s service\n\n", *service)
+	explicitFlags := collectExplicitFlags()
+	configPath := resolveStringOption("config", *configFile, os.Getenv("I18N_CONFIG"), "", "", explicitFlags)
+	cfg, loadedConfigPath, err := loadConfig(configPath)
+	if err != nil {
+		log.Fatalf("Failed to load config: %v", err)
+	}
+	if loadedConfigPath != "" {
+		fmt.Printf("Using config file: %s\n", loadedConfigPath)
+	}
+
+	finalConcurrency, err := resolveIntOption("concurrency", *concurrency, os.Getenv("I18N_CONCURRENCY"), cfg.Concurrency, defaultConcurrency, explicitFlags)
+	if err != nil {
+		log.Fatalf("Failed to resolve concurrency: %v", err)
+	}
+	if finalConcurrency < 1 {
+		log.Fatalf("concurrency must be greater than 0")
+	}
+
+	finalService := resolveStringOption("service", *service, os.Getenv("I18N_SERVICE"), cfg.Service, defaultService, explicitFlags)
+	finalModel := resolveStringOption("model", *model, os.Getenv("I18N_MODEL"), cfg.Model, "", explicitFlags)
+	finalSourceDir := resolveStringOption("source", *sourceDir, os.Getenv("I18N_SOURCE"), cfg.Source, defaultSourceDir, explicitFlags)
+	finalTargetDir := resolveStringOption("target", *targetDir, os.Getenv("I18N_TARGET"), cfg.Target, defaultTargetDir, explicitFlags)
+	finalSourceLang := resolveStringOption("from", *sourceLang, os.Getenv("I18N_FROM"), cfg.From, defaultSourceLang, explicitFlags)
+	finalTargetLang := resolveStringOption("to", *targetLang, os.Getenv("I18N_TO"), cfg.To, defaultTargetLang, explicitFlags)
+	finalAPIKey := resolveStringOption("api-key", *apiKey, os.Getenv("I18N_API_KEY"), cfg.apiKey(), "", explicitFlags)
+	finalURL := resolveStringOption("url", *url, os.Getenv("I18N_URL"), cfg.URL, "", explicitFlags)
+
+	needsAPIKey := finalService == "chatgpt" || finalService == "groq" || finalService == "gemini"
+	if needsAPIKey && finalAPIKey == "" {
+		fmt.Fprintf(os.Stderr, "Error: --api-key is required for %s service\n\n", finalService)
 		flag.Usage()
 		os.Exit(1)
 	}
 
-	if _, err := os.Stat(*sourceDir); os.IsNotExist(err) {
-		log.Fatalf("Source directory does not exist: %s", *sourceDir)
+	if _, err := os.Stat(finalSourceDir); os.IsNotExist(err) {
+		log.Fatalf("Source directory does not exist: %s", finalSourceDir)
 	}
 
 	var translationService TranslationService
-	switch *service {
+	switch finalService {
 	case "chatgpt":
-		var err error
-		translationService, err = providers.ChatGPTProvider(*apiKey, *model)
+		translationService, err = providers.ChatGPTProvider(finalAPIKey, finalModel)
 		if err != nil {
 			log.Fatalf("Failed to initialize ChatGPT service: %v", err)
 		}
 	case "groq":
-		var err error
-		translationService, err = providers.GroqProvider(*apiKey, *model)
+		translationService, err = providers.GroqProvider(finalAPIKey, finalModel)
 		if err != nil {
 			log.Fatalf("Failed to initialize Groq service: %v", err)
 		}
 	case "gemini":
-		var err error
-		translationService, err = providers.GeminiProvider(*apiKey, *model)
+		translationService, err = providers.GeminiProvider(finalAPIKey, finalModel)
 		if err != nil {
 			log.Fatalf("Failed to initialize Gemini service: %v", err)
 		}
 	case "ollama":
-		var err error
-		translationService, err = providers.OllamaProvider(*url, *model)
+		translationService, err = providers.OllamaProvider(finalURL, finalModel)
 		if err != nil {
 			log.Fatalf("Failed to initialize Ollama service: %v", err)
 		}
 	case "lmstudio":
-		var err error
-		translationService, err = providers.LMStudioProvider(*url, *model)
+		translationService, err = providers.LMStudioProvider(finalURL, finalModel)
 		if err != nil {
 			log.Fatalf("Failed to initialize LM Studio service: %v", err)
 		}
 	default:
-		log.Fatalf("Unsupported translation service: %s (supported: chatgpt, groq, gemini, ollama, lmstudio)", *service)
+		log.Fatalf("Unsupported translation service: %s (supported: chatgpt, groq, gemini, ollama, lmstudio)", finalService)
 	}
 
 	translator := &I18nTranslator{
 		service:   translationService,
-		sourceDir: *sourceDir,
-		targetDir: *targetDir,
+		sourceDir: finalSourceDir,
+		targetDir: finalTargetDir,
 	}
 
-	fmt.Printf("Starting translation from %s to languages: %s\n", *sourceLang, *targetLang)
-	fmt.Printf("Source directory: %s\n", *sourceDir)
-	fmt.Printf("Target directory: %s\n", *targetDir)
+	fmt.Printf("Starting translation from %s to languages: %s\n", finalSourceLang, finalTargetLang)
+	fmt.Printf("Source directory: %s\n", finalSourceDir)
+	fmt.Printf("Target directory: %s\n", finalTargetDir)
 
-	jobs, err := buildJobs(*sourceDir, *targetDir, *targetLang)
+	jobs, err := buildJobs(finalSourceDir, finalTargetDir, finalTargetLang)
 	if err != nil {
 		log.Fatalf("Failed to build jobs: %v", err)
 	}
-	if err := runJobs(translator, jobs, *sourceLang, *concurrency); err != nil {
+	if err := runJobs(translator, jobs, finalSourceLang, finalConcurrency); err != nil {
 		log.Fatalf("Error during translation: %v", err)
 	}
 

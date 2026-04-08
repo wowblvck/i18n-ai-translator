@@ -148,6 +148,13 @@ i18n-ai-translator \
   --to=ru
 ```
 
+**Using config file:**
+```bash
+i18n-ai-translator --config=.i18n-translator.yaml
+```
+
+Example file in repository: `.i18n-translator.example.yaml`.
+
 ## 🔧 Command-line options
 
 | Parameter | Description | Default value |
@@ -161,8 +168,33 @@ i18n-ai-translator \
 | `--source` | Source directory or file with translations | `./locales/en` |
 | `--target` | Target directory for translations | `./locales` |
 | `--concurrency` | Number of concurrent workers | `4` |
+| `--config` | Path to YAML config file | auto-load `.i18n-translator.yaml/.yml` |
 | `--help` | Show help message | - |
 | `--version` | Show version | - |
+
+### Config and environment fallbacks
+
+Parameters are resolved in this order:
+1. CLI flags
+2. Environment variables
+3. Config file values
+4. Built-in defaults
+
+Supported environment variables:
+`I18N_SERVICE`, `I18N_API_KEY`, `I18N_MODEL`, `I18N_URL`, `I18N_FROM`, `I18N_TO`, `I18N_SOURCE`, `I18N_TARGET`, `I18N_CONCURRENCY`, `I18N_CONFIG`.
+
+Example config file (`.i18n-translator.yaml`):
+```yaml
+service: gemini
+api_key: your-api-key
+from: en
+to: ru,es,fr
+source: ./locales/en
+target: ./locales
+concurrency: 6
+```
+
+You can start from `.i18n-translator.example.yaml` and copy it to `.i18n-translator.yaml`.
 
 ### Provider defaults
 
@@ -300,7 +332,7 @@ npm run lint:go
 ## ❓ FAQ
 
 **Q: Do I need to pay to use this tool?**
-A: Not necessarily. `ollama` and `lmstudio` are completely free and work offline. For `chatgpt` and `groq`, you need an account with API access.
+A: Not necessarily. `ollama` and `lmstudio` are completely free and work offline. For `chatgpt`, `groq`, and `gemini`, you need an account with API access.
 
 **Q: Can I use this with free ChatGPT account?**
 A: No, you need API access which is separate from the ChatGPT web interface.
@@ -312,7 +344,7 @@ A: Costs depend on text volume and model. For example, translating 100KB of text
 A: Currently, you specify one source language per run. You can run the tool multiple times for different sources.
 
 **Q: Does it work offline?**
-A: Yes, when using `ollama` or `lmstudio`. Cloud providers (`chatgpt`, `groq`) require internet access.
+A: Yes, when using `ollama` or `lmstudio`. Cloud providers (`chatgpt`, `groq`, `gemini`) require internet access.
 
 **Q: Will it overwrite existing translations?**
 A: Yes, existing target files will be overwritten. Use version control to track changes.
