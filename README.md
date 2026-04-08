@@ -1,5 +1,10 @@
 # 🌍 i18n AI Translator
 
+[![npm version](https://img.shields.io/npm/v/%40wowblvck%2Fi18n-ai-translator)](https://www.npmjs.com/package/@wowblvck/i18n-ai-translator)
+[![License](https://img.shields.io/github/license/wowblvck/i18n-ai-translator)](https://github.com/wowblvck/i18n-ai-translator/blob/main/LICENSE.md)
+[![npm downloads](https://img.shields.io/npm/dm/%40wowblvck%2Fi18n-ai-translator)](https://www.npmjs.com/package/@wowblvck/i18n-ai-translator)
+[![GitHub stars](https://img.shields.io/github/stars/wowblvck/i18n-ai-translator?style=social)](https://github.com/wowblvck/i18n-ai-translator/stargazers)
+
 Automatic translation tool for i18n JSON files using AI providers (ChatGPT, Groq, Gemini, Ollama, LM Studio).
 
 ## 📋 Description
