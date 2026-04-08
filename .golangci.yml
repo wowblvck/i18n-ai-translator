@@ -1,0 +1,17 @@
+version: "2"
+
+run:
+  allow-parallel-runners: true
+  timeout: 5m
+
+linters:
+  enable:
+    - govet
+    - ineffassign
+    - modernize
+    - staticcheck
+    - unused
+
+formatters:
+  enable:
+    - gofmt

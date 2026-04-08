@@ -1,14 +1,14 @@
 # 🌍 i18n AI Translator
 
-Automatic translation tool for i18n JSON files using AI providers (ChatGPT, Groq, Ollama, LM Studio).
+Automatic translation tool for i18n JSON files using AI providers (ChatGPT, Groq, Gemini, Ollama, LM Studio).
 
 ## 📋 Description
 
-`i18n-ai-translator` is a CLI tool written in Go that automates the translation process of localization (i18n) files for your projects. It supports multiple AI providers — including cloud-based (OpenAI, Groq) and local (Ollama, LM Studio) — while preserving JSON structure, placeholders, and formatting.
+`i18n-ai-translator` is a CLI tool written in Go that automates the translation process of localization (i18n) files for your projects. It supports multiple AI providers — including cloud-based (OpenAI, Groq, Gemini) and local (Ollama, LM Studio) — while preserving JSON structure, placeholders, and formatting.
 
 ### ✨ Key Features
 
-- 🤖 **Multi-provider support**: ChatGPT, Groq, Ollama, LM Studio
+- 🤖 **Multi-provider support**: ChatGPT, Groq, Gemini, Ollama, LM Studio
 - 🏠 **Local inference**: Run translations offline via Ollama or LM Studio
 - 📁 **Batch processing**: Translates multiple files and languages simultaneously
 - ⚡ **Parallel processing**: Configurable number of concurrent workers
@@ -50,6 +50,11 @@ npm run build
 2. Go to API Keys section
 3. Create a new API key
 
+### Gemini
+1. Sign up at [Google AI Studio](https://aistudio.google.com/)
+2. Go to [API keys](https://aistudio.google.com/app/apikey)
+3. Create a new API key
+
 ### Ollama (local, no API key required)
 1. Install [Ollama](https://ollama.com/)
 2. Pull a model: `ollama pull llama3.2`
@@ -72,6 +77,11 @@ i18n-ai-translator --service=chatgpt --api-key=YOUR_OPENAI_KEY --from=en --to=ru
 **Groq:**
 ```bash
 i18n-ai-translator --service=groq --api-key=YOUR_GROQ_KEY --from=en --to=ru,es,fr
+```
+
+**Gemini:**
+```bash
+i18n-ai-translator --service=gemini --api-key=YOUR_GEMINI_KEY --from=en --to=ru,es,fr
 ```
 
 **Ollama (local):**
@@ -142,8 +152,8 @@ i18n-ai-translator \
 
 | Parameter | Description | Default value |
 |----------|----------|----------------------|
-| `--service` | Translation service: `chatgpt`, `groq`, `ollama`, `lmstudio` | `chatgpt` |
-| `--api-key` | API key (required for `chatgpt` and `groq`) | - |
+| `--service` | Translation service: `chatgpt`, `groq`, `gemini`, `ollama`, `lmstudio` | `chatgpt` |
+| `--api-key` | API key (required for `chatgpt`, `groq`, and `gemini`) | - |
 | `--model` | Model name (see defaults per provider below) | - |
 | `--url` | Base URL for `ollama` or `lmstudio` | see below |
 | `--from` | Source language code | `en` |
@@ -160,6 +170,7 @@ i18n-ai-translator \
 |---------|--------------|-------------|---------|
 | `chatgpt` | `gpt-4o-mini` | `https://api.openai.com/v1` | Required |
 | `groq` | `llama-3.3-70b-versatile` | `https://api.groq.com/openai/v1` | Required |
+| `gemini` | `gemini-2.0-flash` | `https://generativelanguage.googleapis.com/v1beta/openai` | Required |
 | `ollama` | `llama3.2` | `http://localhost:11434/v1` | Not required |
 | `lmstudio` | *(specify via `--model`)* | `http://localhost:1234/v1` | Not required |
 
@@ -263,10 +274,20 @@ npm run build:windows  # Windows x64
 npm run clean
 ```
 
+### Linting (Go)
+
+```bash
+# Install golangci-lint (one-time)
+go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+
+# Run Go linters
+npm run lint:go
+```
+
 ## ⚠️ Limitations
 
-- **API Key required**: Required for `chatgpt` and `groq`; not needed for `ollama` and `lmstudio`
-- **Internet connection**: Required for `chatgpt` and `groq`; `ollama` and `lmstudio` work fully offline
+- **API Key required**: Required for `chatgpt`, `groq`, and `gemini`; not needed for `ollama` and `lmstudio`
+- **Internet connection**: Required for `chatgpt`, `groq`, and `gemini`; `ollama` and `lmstudio` work fully offline
 - **Cost**: Cloud translation costs depend on:
   - Text volume
   - Number of target languages

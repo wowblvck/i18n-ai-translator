@@ -1,0 +1,35 @@
+name: go-lint
+
+on:
+  pull_request:
+    paths:
+      - '**/*.go'
+      - go.mod
+      - go.sum
+      - .golangci.yml
+      - .github/workflows/go-lint.yml
+  push:
+    paths:
+      - '**/*.go'
+      - go.mod
+      - go.sum
+      - .golangci.yml
+      - .github/workflows/go-lint.yml
+
+jobs:
+  golangci:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          args: --timeout=5m ./...

@@ -12,6 +12,7 @@
 		"build:linux": "GOOS=linux GOARCH=amd64 go build -o bin/i18n-ai-translator-linux-x64 ./cmd/main.go",
 		"build:macos": "GOOS=darwin GOARCH=amd64 go build -o bin/i18n-ai-translator-darwin-x64 ./cmd/main.go && GOOS=darwin GOARCH=arm64 go build -o bin/i18n-ai-translator-darwin-arm64 ./cmd/main.go",
 		"build:windows": "GOOS=windows GOARCH=amd64 go build -o bin/i18n-ai-translator-windows-x64.exe ./cmd/main.go",
+		"lint:go": "golangci-lint run ./...",
 		"postinstall": "node scripts/postinstall.js",
 		"clean": "rm -rf bin/"
 	},

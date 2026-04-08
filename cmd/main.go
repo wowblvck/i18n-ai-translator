@@ -32,14 +32,14 @@ type translateJob struct {
 func main() {
 	var (
 		concurrency = flag.Int("concurrency", 4, "Number of parallel workers")
-		model       = flag.String("model", "", "Model name (defaults: chatgpt=gpt-4o-mini, groq=llama-3.3-70b-versatile, ollama=llama3.2)")
+		model       = flag.String("model", "", "Model name (defaults: chatgpt=gpt-4o-mini, groq=llama-3.3-70b-versatile, gemini=gemini-2.0-flash, ollama=llama3.2)")
 		sourceDir   = flag.String("source", "./locales/en", "Source language directory")
 		targetDir   = flag.String("target", "./locales", "Target directory for translations")
 		sourceLang  = flag.String("from", "en", "Source language code")
 		targetLang  = flag.String("to", "es,fr,de", "Target language codes (comma-separated)")
-		apiKey      = flag.String("api-key", "", "API key (required for chatgpt and groq)")
+		apiKey      = flag.String("api-key", "", "API key (required for chatgpt, groq, and gemini)")
 		url         = flag.String("url", "", "Base URL for ollama or lmstudio (e.g., http://localhost:11434/v1)")
-		service     = flag.String("service", "chatgpt", "Translation service: chatgpt, groq, ollama, lmstudio")
+		service     = flag.String("service", "chatgpt", "Translation service: chatgpt, groq, gemini, ollama, lmstudio")
 		help        = flag.Bool("help", false, "Show help message")
 		version     = flag.Bool("version", false, "Show version")
 	)
@@ -52,6 +52,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "\nExamples:\n")
 		fmt.Fprintf(os.Stderr, "  %s --service=chatgpt --api-key=YOUR_KEY --from=en --to=ru,es,fr\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "  %s --service=groq --api-key=YOUR_KEY --model=llama-3.3-70b-versatile --to=ru\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "  %s --service=gemini --api-key=YOUR_KEY --model=gemini-2.0-flash --to=ru\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "  %s --service=ollama --model=llama3.2 --to=ru,es\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "  %s --service=lmstudio --model=your-model --to=ru,es\n", os.Args[0])
 	}
@@ -68,7 +69,7 @@ func main() {
 		return
 	}
 
-	needsAPIKey := *service == "chatgpt" || *service == "groq"
+	needsAPIKey := *service == "chatgpt" || *service == "groq" || *service == "gemini"
 	if needsAPIKey && *apiKey == "" {
 		fmt.Fprintf(os.Stderr, "Error: --api-key is required for %s service\n\n", *service)
 		flag.Usage()
@@ -93,6 +94,12 @@ func main() {
 		if err != nil {
 			log.Fatalf("Failed to initialize Groq service: %v", err)
 		}
+	case "gemini":
+		var err error
+		translationService, err = providers.GeminiProvider(*apiKey, *model)
+		if err != nil {
+			log.Fatalf("Failed to initialize Gemini service: %v", err)
+		}
 	case "ollama":
 		var err error
 		translationService, err = providers.OllamaProvider(*url, *model)
@@ -106,7 +113,7 @@ func main() {
 			log.Fatalf("Failed to initialize LM Studio service: %v", err)
 		}
 	default:
-		log.Fatalf("Unsupported translation service: %s (supported: chatgpt, groq, ollama, lmstudio)", *service)
+		log.Fatalf("Unsupported translation service: %s (supported: chatgpt, groq, gemini, ollama, lmstudio)", *service)
 	}
 
 	translator := &I18nTranslator{
@@ -162,7 +169,7 @@ func buildJobs(sourceDir, targetDir, languages string) ([]translateJob, error) {
 			}
 
 			relPath, _ := filepath.Rel(sourceDir, path)
-			for _, lang := range strings.Split(languages, ",") {
+			for lang := range strings.SplitSeq(languages, ",") {
 				lang = strings.TrimSpace(lang)
 				if lang == "" {
 					continue
@@ -186,7 +193,7 @@ func buildJobs(sourceDir, targetDir, languages string) ([]translateJob, error) {
 		}
 
 		fileName := filepath.Base(sourceDir)
-		for _, lang := range strings.Split(languages, ",") {
+		for lang := range strings.SplitSeq(languages, ",") {
 			lang = strings.TrimSpace(lang)
 			if lang == "" {
 				continue
