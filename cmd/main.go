@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -54,6 +55,14 @@ type translateJob struct {
 type runOptions struct {
 	retries    int
 	retryDelay time.Duration
+}
+
+type runStats struct {
+	Total     int
+	Succeeded int
+	Failed    int
+	Skipped   int
+	Retried   int
 }
 
 type appConfig struct {
@@ -223,6 +232,15 @@ func printPlannedJobs(jobs []translateJob, sourceLang string) {
 	}
 }
 
+func printRunSummary(stats runStats) {
+	fmt.Println("Run summary:")
+	fmt.Printf("  Total: %d\n", stats.Total)
+	fmt.Printf("  Succeeded: %d\n", stats.Succeeded)
+	fmt.Printf("  Failed: %d\n", stats.Failed)
+	fmt.Printf("  Skipped: %d\n", stats.Skipped)
+	fmt.Printf("  Retried: %d\n", stats.Retried)
+}
+
 func shouldRetry(err error) bool {
 	if err == nil {
 		return false
@@ -382,7 +400,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to build jobs: %v", err)
 	}
+	summary := runStats{Total: len(jobs)}
 	jobs, skippedExistingCount := filterJobsByExisting(jobs, finalSkipExisting)
+	summary.Skipped = skippedExistingCount
 	if finalSkipExisting && skippedExistingCount > 0 {
 		fmt.Printf("Skipping %d existing target files due to --skip-existing\n", skippedExistingCount)
 	}
@@ -401,6 +421,7 @@ func main() {
 
 	if len(jobs) == 0 {
 		fmt.Println("No translation jobs to run.")
+		printRunSummary(summary)
 		return
 	}
 
@@ -452,11 +473,18 @@ func main() {
 	fmt.Printf("Source directory: %s\n", finalSourceDir)
 	fmt.Printf("Target directory: %s\n", finalTargetDir)
 
-	if err := runJobs(translator, jobs, finalSourceLang, finalConcurrency, runOptions{
+	runResult := runJobs(translator, jobs, finalSourceLang, finalConcurrency, runOptions{
 		retries:    finalRetries,
 		retryDelay: finalRetryDelay,
-	}); err != nil {
-		log.Fatalf("Error during translation: %v", err)
+	})
+
+	summary.Succeeded = runResult.Succeeded
+	summary.Failed = runResult.Failed
+	summary.Retried = runResult.Retried
+	printRunSummary(summary)
+
+	if summary.Failed > 0 {
+		os.Exit(1)
 	}
 
 	fmt.Println("Translation completed successfully!")
@@ -536,21 +564,26 @@ func buildJobs(sourceDir, targetDir, languages string) ([]translateJob, error) {
 	return jobs, nil
 }
 
-func runJobs(translator *I18nTranslator, jobs []translateJob, sourceLang string, concurrency int, opts runOptions) error {
+func runJobs(translator *I18nTranslator, jobs []translateJob, sourceLang string, concurrency int, opts runOptions) runStats {
 	jobCh := make(chan translateJob)
 	var wg sync.WaitGroup
+	var succeededCount atomic.Int64
+	var failedCount atomic.Int64
+	var retriedCount atomic.Int64
 
 	for range concurrency {
 		wg.Go(func() {
 			for job := range jobCh {
 				if err := os.MkdirAll(filepath.Dir(job.targetPath), 0755); err != nil {
 					log.Printf("Failed to create directory %s: %v", filepath.Dir(job.targetPath), err)
+					failedCount.Add(1)
 					continue
 				}
 				fmt.Printf("Translating %s to %s...\n", job.relPath, job.lang)
 
 				var err error
 				attempts := opts.retries + 1
+				retried := false
 				for attempt := 1; attempt <= attempts; attempt++ {
 					err = translator.TranslateFile(job.sourcePath, job.targetPath, sourceLang, job.lang)
 					if err == nil {
@@ -562,16 +595,23 @@ func runJobs(translator *I18nTranslator, jobs []translateJob, sourceLang string,
 
 					delay := retryDelayForAttempt(opts.retryDelay, attempt)
 					log.Printf("Retrying %s to %s (%d/%d) after %s: %v", job.relPath, job.lang, attempt+1, attempts, delay, err)
+					retried = true
 					if delay > 0 {
 						time.Sleep(delay)
 					}
 				}
 
+				if retried {
+					retriedCount.Add(1)
+				}
+
 				if err != nil {
 					log.Printf("Error translating %s to %s: %v", job.sourcePath, job.lang, err)
+					failedCount.Add(1)
 					continue
 				}
 				fmt.Printf("✓ Successfully translated %s to %s\n", job.relPath, job.lang)
+				succeededCount.Add(1)
 			}
 		})
 	}
@@ -584,5 +624,9 @@ func runJobs(translator *I18nTranslator, jobs []translateJob, sourceLang string,
 	}()
 
 	wg.Wait()
-	return nil
+	return runStats{
+		Succeeded: int(succeededCount.Load()),
+		Failed:    int(failedCount.Load()),
+		Retried:   int(retriedCount.Load()),
+	}
 }

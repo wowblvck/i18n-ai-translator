@@ -223,6 +223,13 @@ timeout: 60s
 
 You can start from `.i18n-translator.example.yaml` and copy it to `.i18n-translator.yaml`.
 
+### Exit codes and summary
+
+At the end of each run, the CLI prints a summary with `Total`, `Succeeded`, `Failed`, `Skipped`, and `Retried`.
+
+- Exit code `0`: all scheduled jobs finished successfully.
+- Exit code `1`: one or more jobs failed.
+
 ### Provider defaults
 
 | Service | Default model | Default URL | API key |
