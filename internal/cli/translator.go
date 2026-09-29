@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -17,5 +18,10 @@ func (t *translator) TranslateFile(sourceFile, targetFile, sourceLang, targetLan
 		return fmt.Errorf("failed to translate content: %w", err)
 	}
 
-	return os.WriteFile(targetFile, []byte(strings.TrimSpace(translatedJSON)), 0644)
+	translatedJSON = strings.TrimSpace(translatedJSON)
+	if !json.Valid([]byte(translatedJSON)) {
+		return fmt.Errorf("translated content is not valid JSON")
+	}
+
+	return os.WriteFile(targetFile, []byte(translatedJSON), 0644)
 }

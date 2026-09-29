@@ -121,8 +121,8 @@ func shouldRetry(err error) bool {
 		return false
 	}
 
-	var apiErr *openai.APIError
-	if errors.As(err, &apiErr) {
+	apiErr, ok := errors.AsType[*openai.APIError](err)
+	if ok {
 		if apiErr.HTTPStatusCode == 429 || apiErr.HTTPStatusCode >= 500 {
 			return true
 		}

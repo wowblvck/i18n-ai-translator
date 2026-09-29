@@ -13,14 +13,14 @@ func runTranslateCommand(binaryName string, args []string) int {
 
 	var (
 		concurrency  = fs.Int("concurrency", defaultConcurrency, "Number of parallel workers")
-		model        = fs.String("model", "", "Model name (defaults: chatgpt=gpt-4o-mini, groq=openai/gpt-oss-120b, gemini=gemini-3.8-flash, ollama=llama3.2)")
+		model        = fs.String("model", "", "Model name (defaults: chatgpt=gpt-4o-mini, groq=openai/gpt-oss-120b, gemini=gemini-3.8-flash, anthropic=claude-sonnet-5-5, deepseek=deepseek-flash, mistral=mistral-medium-3-5, xai=grok-4.7, ollama=llama3.2; openrouter requires a model)")
 		sourceDir    = fs.String("source", defaultSourceDir, "Source language directory")
 		targetDir    = fs.String("target", defaultTargetDir, "Target directory for translations")
 		sourceLang   = fs.String("from", defaultSourceLang, "Source language code")
 		targetLang   = fs.String("to", defaultTargetLang, "Target language codes (comma-separated)")
-		apiKey       = fs.String("api-key", "", "API key (required for chatgpt, groq, and gemini)")
+		apiKey       = fs.String("api-key", "", "API key (required for cloud services)")
 		url          = fs.String("url", "", "Base URL for ollama or lmstudio (e.g., http://localhost:11434/v1)")
-		service      = fs.String("service", defaultService, "Translation service: chatgpt, groq, gemini, ollama, lmstudio")
+		service      = fs.String("service", defaultService, "Translation service: chatgpt, groq, gemini, anthropic, deepseek, mistral, xai, openrouter, ollama, lmstudio")
 		configFile   = fs.String("config", "", "Path to YAML config file (auto-loads .i18n-translator.yaml/.yml when omitted)")
 		dryRun       = fs.Bool("dry-run", false, "Preview translation jobs without writing files")
 		listFiles    = fs.Bool("list-files", false, "Print planned source/target files and exit")
@@ -46,6 +46,11 @@ func runTranslateCommand(binaryName string, args []string) int {
 		fmt.Fprintf(os.Stderr, "  %s --service=chatgpt --api-key=YOUR_KEY --from=en --to=ru,es,fr\n", binaryName)
 		fmt.Fprintf(os.Stderr, "  %s --service=groq --api-key=YOUR_KEY --model=openai/gpt-oss-120b --to=ru\n", binaryName)
 		fmt.Fprintf(os.Stderr, "  %s --service=gemini --api-key=YOUR_KEY --model=gemini-3.8-flash --to=ru\n", binaryName)
+		fmt.Fprintf(os.Stderr, "  %s --service=anthropic --api-key=YOUR_KEY --model=claude-sonnet-5-5 --to=ru\n", binaryName)
+		fmt.Fprintf(os.Stderr, "  %s --service=deepseek --api-key=YOUR_KEY --model=deepseek-flash --to=ru\n", binaryName)
+		fmt.Fprintf(os.Stderr, "  %s --service=mistral --api-key=YOUR_KEY --model=mistral-medium-3-5 --to=ru\n", binaryName)
+		fmt.Fprintf(os.Stderr, "  %s --service=xai --api-key=YOUR_KEY --model=grok-4.7 --to=ru\n", binaryName)
+		fmt.Fprintf(os.Stderr, "  %s --service=openrouter --api-key=YOUR_KEY --model=provider/model --to=ru\n", binaryName)
 		fmt.Fprintf(os.Stderr, "  %s --service=ollama --model=llama3.2 --to=ru,es\n", binaryName)
 		fmt.Fprintf(os.Stderr, "  %s --service=lmstudio --model=your-model --to=ru,es\n", binaryName)
 		fmt.Fprintf(os.Stderr, "  %s --config=.i18n-translator.yaml --to=ru,es\n", binaryName)
@@ -191,7 +196,9 @@ func runTranslateCommand(binaryName string, args []string) int {
 		return 0
 	}
 
-	needsAPIKey := finalService == "chatgpt" || finalService == "groq" || finalService == "gemini"
+	needsAPIKey := finalService == "chatgpt" || finalService == "groq" || finalService == "gemini" ||
+		finalService == "anthropic" || finalService == "deepseek" || finalService == "mistral" ||
+		finalService == "xai" || finalService == "openrouter"
 	if needsAPIKey && finalAPIKey == "" {
 		fmt.Fprintf(os.Stderr, "Error: --api-key is required for %s service\n\n", finalService)
 		fs.Usage()

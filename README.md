@@ -5,15 +5,15 @@
 [![npm downloads](https://img.shields.io/npm/dm/%40wowblvck%2Fi18n-ai-translator)](https://www.npmjs.com/package/@wowblvck/i18n-ai-translator)
 [![GitHub stars](https://img.shields.io/github/stars/wowblvck/i18n-ai-translator?style=social)](https://github.com/wowblvck/i18n-ai-translator/stargazers)
 
-Automatic translation tool for i18n JSON files using AI providers (ChatGPT, Groq, Gemini, Ollama, LM Studio).
+Automatic translation tool for i18n JSON files using AI providers (OpenAI, Anthropic, DeepSeek, Mistral, Groq, Gemini, xAI, OpenRouter) and local models (Ollama, LM Studio).
 
 ## 📋 Description
 
-`i18n-ai-translator` is a CLI tool written in Go that automates translation of localization (i18n) files. It supports cloud providers (OpenAI, Groq, Gemini) and local servers (Ollama, LM Studio). The full contents of each `.json` file are sent to the selected model as text; the tool asks the model to preserve JSON structure, placeholders, and formatting, but it does not parse or validate the returned JSON.
+`i18n-ai-translator` is a CLI tool written in Go that automates translation of localization (i18n) files. The full contents of each `.json` file are sent to the selected model as text. The CLI asks the model to preserve the JSON structure, placeholders, and formatting, extracts the translated text from the model's JSON response, and checks that the translated text is valid JSON before writing it.
 
 ### ✨ Key Features
 
-- 🤖 **Multi-provider support**: ChatGPT, Groq, Gemini, Ollama, LM Studio
+- 🤖 **Multi-provider support**: OpenAI, Anthropic Claude, DeepSeek, Mistral, Groq, Gemini, xAI Grok, OpenRouter, Ollama, LM Studio
 - 🏠 **Local inference**: Run translations offline via Ollama or LM Studio
 - 📁 **Batch processing**: Translates multiple files and languages simultaneously
 - ⚡ **Parallel processing**: Configurable number of concurrent workers
@@ -65,6 +65,27 @@ npm run build
 2. Go to [API keys](https://aistudio.google.com/app/apikey)
 3. Create a new API key
 
+### Anthropic Claude
+1. Create an account at [Anthropic Console](https://console.anthropic.com/)
+2. Create an API key in [Settings → API keys](https://console.anthropic.com/settings/keys)
+
+### DeepSeek
+1. Create an account at [DeepSeek Platform](https://platform.deepseek.com/)
+2. Create an API key in [API Keys](https://platform.deepseek.com/api_keys)
+
+### Mistral
+1. Create an account at [Mistral La Plateforme](https://console.mistral.ai/)
+2. Create an API key in [API keys](https://console.mistral.ai/api-keys/)
+
+### xAI Grok
+1. Create an account at [xAI Console](https://console.x.ai/)
+2. Create an API key on the API Keys page
+
+### OpenRouter
+1. Create an account at [OpenRouter](https://openrouter.ai/)
+2. Create an API key in [Settings → Keys](https://openrouter.ai/settings/keys)
+3. Choose a model from the [OpenRouter model catalog](https://openrouter.ai/models)
+
 ### Ollama (local, no API key required)
 1. Install [Ollama](https://ollama.com/)
 2. Pull a model: `ollama pull llama3.2`
@@ -92,6 +113,31 @@ i18n-ai-translator --service=groq --api-key=YOUR_GROQ_KEY --from=en --to=ru,es,f
 **Gemini:**
 ```bash
 i18n-ai-translator --service=gemini --api-key=YOUR_GEMINI_KEY --from=en --to=ru,es,fr
+```
+
+**Anthropic Claude:**
+```bash
+i18n-ai-translator --service=anthropic --api-key=YOUR_ANTHROPIC_KEY --from=en --to=ru,es,fr
+```
+
+**DeepSeek:**
+```bash
+i18n-ai-translator --service=deepseek --api-key=YOUR_DEEPSEEK_KEY --from=en --to=ru,es,fr
+```
+
+**Mistral:**
+```bash
+i18n-ai-translator --service=mistral --api-key=YOUR_MISTRAL_KEY --from=en --to=ru,es,fr
+```
+
+**xAI Grok:**
+```bash
+i18n-ai-translator --service=xai --api-key=YOUR_XAI_KEY --from=en --to=ru,es,fr
+```
+
+**OpenRouter** (choose a model from its catalog):
+```bash
+i18n-ai-translator --service=openrouter --api-key=YOUR_OPENROUTER_KEY --model=provider/model-id --from=en --to=ru,es,fr
 ```
 
 **Ollama (local):**
@@ -209,8 +255,8 @@ The repository includes `.i18n-translator.example.yaml`. If the template file is
 
 | Parameter | Description | Default value |
 |----------|----------|----------------------|
-| `--service` | Translation service: `chatgpt`, `groq`, `gemini`, `ollama`, `lmstudio` | `chatgpt` |
-| `--api-key` | API key (required for `chatgpt`, `groq`, and `gemini`) | - |
+| `--service` | Translation service: `chatgpt`, `anthropic`, `deepseek`, `mistral`, `groq`, `gemini`, `xai`, `openrouter`, `ollama`, `lmstudio` | `chatgpt` |
+| `--api-key` | API key (required for cloud services) | - |
 | `--model` | Model name (see defaults per provider below) | - |
 | `--url` | Base URL for `ollama` or `lmstudio` | see below |
 | `--from` | Source language code | `en` |
@@ -265,7 +311,7 @@ In a source checkout, you can start from `.i18n-translator.example.yaml` and cop
 After a translation run, the CLI prints a summary with `Total`, `Succeeded`, `Failed`, `Skipped`, and `Retried` (jobs retried at least once). Preview and planning modes (`--dry-run` and `--list-files`) print their plans instead.
 When `--fail-fast` is enabled, the summary also shows whether fail-fast was triggered and the first error that caused it.
 
-- Exit code `0`: no job or file-write error was reported. The CLI does not validate that model output is valid JSON.
+- Exit code `0`: no job or file-write error was reported, and each translated result was valid JSON. The CLI does not compare the result's structure or keys with the source, so review generated files before using them.
 - Exit code `1`: one or more jobs failed.
 
 ### Provider defaults
@@ -275,6 +321,11 @@ When `--fail-fast` is enabled, the summary also shows whether fail-fast was trig
 | `chatgpt` | `gpt-4o-mini` | `https://api.openai.com/v1` | Required |
 | `groq` | `openai/gpt-oss-120b` | `https://api.groq.com/openai/v1` | Required |
 | `gemini` | `gemini-3.8-flash` | `https://generativelanguage.googleapis.com/v1beta/openai` | Required |
+| `anthropic` | `claude-sonnet-5-5` | `https://api.anthropic.com` | Required |
+| `deepseek` | `deepseek-flash` | `https://api.deepseek.com` | Required |
+| `mistral` | `mistral-medium-3-5` | `https://api.mistral.ai/v1` | Required |
+| `xai` | `grok-4.7` | `https://api.x.ai/v1` | Required |
+| `openrouter` | *(specify via `--model`)* | `https://openrouter.ai/api/v1` | Required |
 | `ollama` | `llama3.2` | `http://localhost:11434/v1` | Not required |
 | `lmstudio` | *(specify via `--model`)* | `http://localhost:1234/v1` | Not required |
 
@@ -302,7 +353,7 @@ And many more...
 
 ## 📝 File format
 
-The CLI accepts files whose names end in `.json`. It sends each complete file to the model as text and writes the model's translated text to the target file. The CLI does not parse the input or validate that the response is valid JSON, so review generated files before using them.
+The CLI accepts files whose names end in `.json`. It sends each complete file to the model as text, parses the model's response envelope to extract the translated text, and checks that text is valid JSON before writing the target file. If validation fails, the job reports an error and does not write the target file. The CLI does not compare the output structure or keys with the source, so review generated files before using them.
 
 **Source file (en/common.json):**
 ```json
@@ -392,13 +443,13 @@ npm run lint:go
 
 ## ⚠️ Limitations
 
-- **API Key required**: Required for `chatgpt`, `groq`, and `gemini`; not needed for `ollama` and `lmstudio`
-- **Internet connection**: Required for `chatgpt`, `groq`, and `gemini`; `ollama` and `lmstudio` work fully offline
+- **API Key required**: Required for cloud services (`chatgpt`, `anthropic`, `deepseek`, `mistral`, `groq`, `gemini`, `xai`, and `openrouter`); not needed for `ollama` and `lmstudio`
+- **Internet connection**: Required for cloud services; `ollama` and `lmstudio` work locally, though model downloads and setup may require internet access
 - **Cost**: Cloud translation costs depend on:
   - Text volume
   - Number of target languages
   - Chosen model
-  - Current provider pricing ([OpenAI](https://openai.com/api/pricing/), [Groq](https://console.groq.com/docs/models), [Gemini](https://ai.google.dev/gemini-api/docs/pricing))
+  - Current provider pricing ([OpenAI](https://openai.com/api/pricing/), [Anthropic](https://platform.claude.com/docs/en/about-claude/pricing), [DeepSeek](https://api-docs.deepseek.com/quick_start/pricing), [Mistral](https://docs.mistral.ai/inference/pricing), [Groq](https://console.groq.com/docs/models), [Gemini](https://ai.google.dev/gemini-api/docs/pricing), [xAI](https://docs.x.ai/developers/pricing), [OpenRouter](https://openrouter.ai/models))
 - **Rate limits**: Cloud providers have rate limits based on your account tier
 - **Quality**: While AI translations are generally good, manual review is recommended for critical content
 - **Local models**: Translation quality varies by model size — larger models generally produce better results
@@ -406,7 +457,7 @@ npm run lint:go
 ## ❓ FAQ
 
 **Q: Do I need to pay to use this tool?**
-A: Local inference through `ollama` or `lmstudio` does not incur this tool's cloud API charges, though it requires local hardware and a model whose license permits your use. Cloud providers (`chatgpt`, `groq`, and `gemini`) require API access and may charge for usage.
+A: Local inference through `ollama` or `lmstudio` does not incur this tool's cloud API charges, though it requires local hardware and a model whose license permits your use. Cloud providers require API access and may charge for usage.
 
 **Q: Can I use this with free ChatGPT account?**
 A: No, you need API access which is separate from the ChatGPT web interface.
@@ -418,7 +469,7 @@ A: It depends on the amount of input and output tokens and the selected model. C
 A: Currently, you specify one source language per run. You can run the tool multiple times for different sources.
 
 **Q: Does it work offline?**
-A: Yes, when using `ollama` or `lmstudio`. Cloud providers (`chatgpt`, `groq`, `gemini`) require internet access.
+A: Yes, when using `ollama` or `lmstudio`. Cloud providers require internet access.
 
 **Q: Will it overwrite existing translations?**
 A: By default, yes. Use `--skip-existing` to leave existing target files untouched.

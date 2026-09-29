@@ -1,10 +1,12 @@
 package providers
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -27,6 +29,32 @@ type translateItem struct {
 }
 
 func performTranslation(client *openai.Client, model, text, sourceLang, targetLang string, temperature float32) (string, error) {
+	systemPrompt, userPrompt, err := translationPrompt(text, sourceLang, targetLang)
+	if err != nil {
+		return "", err
+	}
+
+	ctx := context.Background()
+	resp, err := client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
+		Model: model,
+		Messages: []openai.ChatCompletionMessage{
+			{Role: openai.ChatMessageRoleSystem, Content: systemPrompt},
+			{Role: openai.ChatMessageRoleUser, Content: userPrompt},
+		},
+		Temperature: temperature,
+	})
+	if err != nil {
+		return "", err
+	}
+
+	if len(resp.Choices) == 0 {
+		return "", errors.New("empty response from provider")
+	}
+
+	return parseTranslation(resp.Choices[0].Message.Content)
+}
+
+func translationPrompt(text, sourceLang, targetLang string) (string, string, error) {
 	systemPrompt := strings.TrimSpace(fmt.Sprintf(`
 Translate from %s to %s.
 
@@ -44,6 +72,8 @@ Special Instructions:
 - Do NOT convert {{NEWLINE}} to \n.
 - Do NOT translate or modify i18n function calls in the form $t(key); return them verbatim (e.g., $t(ago) stays $t(ago)).
 - Do NOT translate or modify HTML/XML tags (e.g., <button>...</button>, <icon/>, <actionButton/>, <bracketsButton/>); preserve tag names, attributes, and structure.
+- The 'translated' value must be a complete, valid JSON document with the same object/array structure as the original text.
+- Return only the JSON response; do not wrap it in Markdown code fences.
 
 Return the translation as JSON.
 `, sourceLang, targetLang))
@@ -53,32 +83,19 @@ Return the translation as JSON.
 	}
 	payload, err := json.Marshal(items)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
-	ctx := context.Background()
-	resp, err := client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
-		Model: model,
-		Messages: []openai.ChatCompletionMessage{
-			{Role: openai.ChatMessageRoleSystem, Content: systemPrompt},
-			{Role: openai.ChatMessageRoleUser, Content: "inputLanguage=" + sourceLang + "; outputLanguage=" + targetLang + ";\n" + string(payload)},
-		},
-		Temperature: temperature,
-	})
-	if err != nil {
-		return "", err
-	}
+	return systemPrompt, "inputLanguage=" + sourceLang + "; outputLanguage=" + targetLang + ";\n" + string(payload), nil
+}
 
-	if len(resp.Choices) == 0 {
-		return "", errors.New("empty response from provider")
-	}
-
-	content := strings.TrimSpace(resp.Choices[0].Message.Content)
+func parseTranslation(content string) (string, error) {
+	content = strings.TrimSpace(content)
 	jsonText := extractJSON(content)
 
 	var out []translateItem
 	if err := json.Unmarshal([]byte(jsonText), &out); err != nil {
-		return "", err
+		return "", fmt.Errorf("parse translation response: %w", err)
 	}
 	if len(out) == 0 {
 		return "", errors.New("no translations returned")
@@ -87,6 +104,41 @@ Return the translation as JSON.
 		return "", errors.New("translated field is empty in response")
 	}
 	return out[0].Translated, nil
+}
+
+func postJSON(client *http.Client, endpoint string, headers map[string]string, payload any, provider string) ([]byte, error) {
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("encode %s request: %w", provider, err)
+	}
+
+	req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewReader(data))
+	if err != nil {
+		return nil, fmt.Errorf("create %s request: %w", provider, err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	for name, value := range headers {
+		req.Header.Set(name, value)
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("send %s request: %w", provider, err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	const maxResponseSize = 16 << 20
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseSize+1))
+	if err != nil {
+		return nil, fmt.Errorf("read %s response: %w", provider, err)
+	}
+	if len(body) > maxResponseSize {
+		return nil, fmt.Errorf("%s response exceeds %d bytes", provider, maxResponseSize)
+	}
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		return nil, fmt.Errorf("%s API returned %s: %s", provider, resp.Status, strings.TrimSpace(string(body)))
+	}
+	return body, nil
 }
 
 func extractJSON(s string) string {
