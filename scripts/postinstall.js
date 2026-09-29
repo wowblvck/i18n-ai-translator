@@ -14,8 +14,10 @@ function resolveAsset() {
 		if (arch === "x64") return "i18n-ai-translator-darwin-x64";
 	} else if (platform === "linux") {
 		if (arch === "x64") return "i18n-ai-translator-linux-x64";
+		if (arch === "arm64") return "i18n-ai-translator-linux-arm64";
 	} else if (platform === "win32") {
 		if (arch === "x64") return "i18n-ai-translator-windows-x64.exe";
+		if (arch === "arm64") return "i18n-ai-translator-windows-arm64.exe";
 	}
 	return null;
 }

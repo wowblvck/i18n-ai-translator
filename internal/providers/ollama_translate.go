@@ -29,5 +29,5 @@ func OllamaProvider(baseURL, model string, timeout time.Duration) (*OllamaServic
 }
 
 func (o *OllamaService) Translate(text, sourceLang, targetLang string) (string, error) {
-	return performTranslation(o.client, o.model, text, sourceLang, targetLang)
+	return performTranslation(o.client, o.model, text, sourceLang, targetLang, 0.2)
 }

@@ -9,7 +9,7 @@ Automatic translation tool for i18n JSON files using AI providers (ChatGPT, Groq
 
 ## 📋 Description
 
-`i18n-ai-translator` is a CLI tool written in Go that automates the translation process of localization (i18n) files for your projects. It supports multiple AI providers — including cloud-based (OpenAI, Groq, Gemini) and local (Ollama, LM Studio) — while preserving JSON structure, placeholders, and formatting.
+`i18n-ai-translator` is a CLI tool written in Go that automates translation of localization (i18n) files. It supports cloud providers (OpenAI, Groq, Gemini) and local servers (Ollama, LM Studio). The full contents of each `.json` file are sent to the selected model as text; the tool asks the model to preserve JSON structure, placeholders, and formatting, but it does not parse or validate the returned JSON.
 
 ### ✨ Key Features
 
@@ -17,13 +17,15 @@ Automatic translation tool for i18n JSON files using AI providers (ChatGPT, Groq
 - 🏠 **Local inference**: Run translations offline via Ollama or LM Studio
 - 📁 **Batch processing**: Translates multiple files and languages simultaneously
 - ⚡ **Parallel processing**: Configurable number of concurrent workers
-- 🔒 **Format preservation**: Keeps placeholders (`{{variable}}`), HTML tags, and i18n functions (`$t(key)`) intact
+- 🔒 **Format-aware prompts**: Asks the model to preserve placeholders (`{{variable}}`), HTML tags, and i18n functions (`$t(key)`)
 - 🌐 **Multi-language support**: Support for multiple target languages in a single run
 - 📦 **Easy installation**: Pre-built binaries for Linux, macOS, and Windows
 
 ## 🚀 Installation
 
 ### Via npm/yarn
+
+Requires Node.js 22 or newer. Prebuilt binaries are provided for macOS 13+ (x64 and ARM64), Linux (x64 and ARM64), and Windows (x64 and ARM64).
 
 ```bash
 npm install -g @wowblvck/i18n-ai-translator
@@ -32,6 +34,9 @@ yarn global add @wowblvck/i18n-ai-translator
 ```
 
 ### Via Go
+
+Requires Go 1.26.8 or newer.
+
 ```bash
 go install github.com/wowblvck/i18n-translator/cmd@latest
 ```
@@ -198,6 +203,8 @@ Options:
 - `--example` source template path (default: `.i18n-translator.example.yaml`)
 - `--force` overwrite target file if it exists
 
+The repository includes `.i18n-translator.example.yaml`. If the template file is unavailable (as in the npm package), `init` uses the equivalent built-in template.
+
 ## 🔧 Command-line options
 
 | Parameter | Description | Default value |
@@ -251,14 +258,14 @@ retry_delay: 1s
 timeout: 60s
 ```
 
-You can start from `.i18n-translator.example.yaml` and copy it to `.i18n-translator.yaml`.
+In a source checkout, you can start from `.i18n-translator.example.yaml` and copy it to `.i18n-translator.yaml`.
 
 ### Exit codes and summary
 
-At the end of each run, the CLI prints a summary with `Total`, `Succeeded`, `Failed`, `Skipped`, and `Retried`.
-When `--fail-fast` is enabled, summary also shows whether fail-fast was triggered and the first error that caused stop.
+After a translation run, the CLI prints a summary with `Total`, `Succeeded`, `Failed`, `Skipped`, and `Retried` (jobs retried at least once). Preview and planning modes (`--dry-run` and `--list-files`) print their plans instead.
+When `--fail-fast` is enabled, the summary also shows whether fail-fast was triggered and the first error that caused it.
 
-- Exit code `0`: all scheduled jobs finished successfully.
+- Exit code `0`: no job or file-write error was reported. The CLI does not validate that model output is valid JSON.
 - Exit code `1`: one or more jobs failed.
 
 ### Provider defaults
@@ -266,14 +273,14 @@ When `--fail-fast` is enabled, summary also shows whether fail-fast was triggere
 | Service | Default model | Default URL | API key |
 |---------|--------------|-------------|---------|
 | `chatgpt` | `gpt-4o-mini` | `https://api.openai.com/v1` | Required |
-| `groq` | `llama-3.3-70b-versatile` | `https://api.groq.com/openai/v1` | Required |
-| `gemini` | `gemini-2.0-flash` | `https://generativelanguage.googleapis.com/v1beta/openai` | Required |
+| `groq` | `openai/gpt-oss-120b` | `https://api.groq.com/openai/v1` | Required |
+| `gemini` | `gemini-3.8-flash` | `https://generativelanguage.googleapis.com/v1beta/openai` | Required |
 | `ollama` | `llama3.2` | `http://localhost:11434/v1` | Not required |
 | `lmstudio` | *(specify via `--model`)* | `http://localhost:1234/v1` | Not required |
 
 ### 🌍 Supported languages
 
-The tool supports all languages available in the chosen AI provider. Use standard ISO 639-1 language codes:
+Language availability depends on the selected model. The CLI passes the `--from` and `--to` values to the model without validating language codes; the examples below use common ISO 639-1 codes:
 
 | Code | Language | Code | Language |
 |-----|------|-----|------|
@@ -295,7 +302,7 @@ And many more...
 
 ## 📝 File format
 
-The tool works with any i18n JSON files:
+The CLI accepts files whose names end in `.json`. It sends each complete file to the model as text and writes the model's translated text to the target file. The CLI does not parse the input or validate that the response is valid JSON, so review generated files before using them.
 
 **Source file (en/common.json):**
 ```json
@@ -329,22 +336,22 @@ The tool works with any i18n JSON files:
 
 ## 🔒 Translation features
 
-The translator intelligently handles special elements:
+The translation prompt asks the model to handle special elements as follows. The model may still change them, so check the output, especially for production or user-facing text:
 
-- ✅ **Placeholders**: `{{variable}}`, `{{username}}`, `{{count}}` remain unchanged
-- ✅ **i18n functions**: `$t(key)`, `$t(notifications)` are preserved as-is
-- ✅ **HTML tags**: `<button>`, `<icon/>`, `<div>` are not modified
-- ✅ **Formatting**: Whitespace, case sensitivity, and structure are preserved
-- ✅ **Special characters**: `{{NEWLINE}}` is not converted to `\n`
-- ✅ **Length preservation**: Keeps approximately the same text length
-- ✅ **Nested objects**: Handles complex JSON structures with any nesting level
+- **Placeholders**: Asked to keep `{{variable}}`, `{{username}}`, and `{{count}}` unchanged
+- **i18n functions**: Asked to preserve `$t(key)` and `$t(notifications)`
+- **HTML tags**: Asked to preserve tag names, attributes, and structure
+- **Formatting**: Asked to preserve whitespace, case, and structure
+- **Special characters**: Asked to keep `{{NEWLINE}}` instead of converting it to `\n`
+- **Length**: Asked to keep roughly the same text length
+- **Nested objects**: The complete JSON text is sent as one string; the CLI does not traverse object values itself
 
 ## 🛠️ Development
 
 ### Requirements
 
-- Go 1.25.1+
-- Node.js 16+
+- Go 1.26.8+
+- Node.js 22+
 
 ### Building the project
 
@@ -363,13 +370,15 @@ npm run build
 npm run build:all
 
 # Build for specific platform
-npm run build:linux    # Linux x64
+npm run build:linux    # Linux x64 and ARM64
 npm run build:macos    # macOS x64 and ARM64
-npm run build:windows  # Windows x64
+npm run build:windows  # Windows x64 and ARM64
 
 # Clean build artifacts
 npm run clean
 ```
+
+The npm build scripts use POSIX-style shell syntax. On Windows, run them in WSL or configure npm to use a POSIX shell. To build natively in PowerShell, use `go build -o bin/i18n-ai-translator.exe ./cmd/main.go`.
 
 ### Linting (Go)
 
@@ -389,7 +398,7 @@ npm run lint:go
   - Text volume
   - Number of target languages
   - Chosen model
-  - API pricing ([OpenAI Pricing](https://openai.com/api/pricing/), [Groq Pricing](https://groq.com/pricing/))
+  - Current provider pricing ([OpenAI](https://openai.com/api/pricing/), [Groq](https://console.groq.com/docs/models), [Gemini](https://ai.google.dev/gemini-api/docs/pricing))
 - **Rate limits**: Cloud providers have rate limits based on your account tier
 - **Quality**: While AI translations are generally good, manual review is recommended for critical content
 - **Local models**: Translation quality varies by model size — larger models generally produce better results
@@ -397,13 +406,13 @@ npm run lint:go
 ## ❓ FAQ
 
 **Q: Do I need to pay to use this tool?**
-A: Not necessarily. `ollama` and `lmstudio` are completely free and work offline. For `chatgpt`, `groq`, and `gemini`, you need an account with API access.
+A: Local inference through `ollama` or `lmstudio` does not incur this tool's cloud API charges, though it requires local hardware and a model whose license permits your use. Cloud providers (`chatgpt`, `groq`, and `gemini`) require API access and may charge for usage.
 
 **Q: Can I use this with free ChatGPT account?**
 A: No, you need API access which is separate from the ChatGPT web interface.
 
 **Q: How much does it cost to translate?**
-A: Costs depend on text volume and model. For example, translating 100KB of text with `gpt-4o-mini` typically costs $0.01-0.05. Groq is significantly cheaper. Ollama and LM Studio are free.
+A: It depends on the amount of input and output tokens and the selected model. Check the provider's current pricing; rates and model availability can change. Local inference has no per-request API charge from this tool.
 
 **Q: Can I translate from multiple source languages?**
 A: Currently, you specify one source language per run. You can run the tool multiple times for different sources.
@@ -412,10 +421,10 @@ A: Currently, you specify one source language per run. You can run the tool mult
 A: Yes, when using `ollama` or `lmstudio`. Cloud providers (`chatgpt`, `groq`, `gemini`) require internet access.
 
 **Q: Will it overwrite existing translations?**
-A: Yes, existing target files will be overwritten. Use version control to track changes.
+A: By default, yes. Use `--skip-existing` to leave existing target files untouched.
 
 **Q: Can I customize the translation prompts?**
 A: Not currently via CLI, but you can modify the code in `internal/providers/common.go`.
 
 **Q: What if translation fails?**
-A: The tool logs errors and continues with other files. Check the console output for details.
+A: The tool logs the error and continues scheduling other jobs by default. With `--fail-fast`, it stops scheduling new jobs after the first translation error; jobs already in progress may still finish. Check the console output for details.

@@ -26,7 +26,7 @@ type translateItem struct {
 	Failure    string `json:"failure,omitempty"`
 }
 
-func performTranslation(client *openai.Client, model, text, sourceLang, targetLang string) (string, error) {
+func performTranslation(client *openai.Client, model, text, sourceLang, targetLang string, temperature float32) (string, error) {
 	systemPrompt := strings.TrimSpace(fmt.Sprintf(`
 Translate from %s to %s.
 
@@ -63,7 +63,7 @@ Return the translation as JSON.
 			{Role: openai.ChatMessageRoleSystem, Content: systemPrompt},
 			{Role: openai.ChatMessageRoleUser, Content: "inputLanguage=" + sourceLang + "; outputLanguage=" + targetLang + ";\n" + string(payload)},
 		},
-		Temperature: 0.2,
+		Temperature: temperature,
 	})
 	if err != nil {
 		return "", err

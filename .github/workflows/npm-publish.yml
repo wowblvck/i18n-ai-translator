@@ -1,15 +1,13 @@
 name: npm-publish
 
 on:
-  release:
-    types: [published]
   push:
     tags:
       - 'v*.*.*'
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
@@ -27,17 +25,23 @@ jobs:
           - goos: linux
             goarch: amd64
             out: i18n-ai-translator-linux-x64
+          - goos: linux
+            goarch: arm64
+            out: i18n-ai-translator-linux-arm64
           - goos: windows
             goarch: amd64
             out: i18n-ai-translator-windows-x64.exe
+          - goos: windows
+            goarch: arm64
+            out: i18n-ai-translator-windows-arm64.exe
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
-          go-version: '1.25'
+          go-version: '1.27.1'
 
       - name: Build ${{ matrix.goos }}-${{ matrix.goarch }}
         run: |
@@ -59,9 +63,11 @@ jobs:
   release_and_publish:
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Download all artifacts
         uses: actions/download-artifact@v8
@@ -72,12 +78,12 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v6
         with:
-          node-version: 20
+          node-version: 24
           registry-url: 'https://registry.npmjs.org'
           cache: 'npm'
 
       - name: Create GitHub Release (attach binaries)
-        if: github.ref_type == 'tag'
+        if: github.event_name == 'push' && github.ref_type == 'tag'
         uses: softprops/action-gh-release@v2
         with:
           files: dist/*
@@ -86,6 +92,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Publish to npm
+        if: github.event_name == 'push' && github.ref_type == 'tag'
         run: npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

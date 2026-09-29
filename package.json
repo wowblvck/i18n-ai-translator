@@ -9,9 +9,9 @@
 	"scripts": {
 		"build": "go build -ldflags \"-X github.com/wowblvck/i18n-translator/internal/cli.Version=v$npm_package_version\" -o bin/i18n-ai-translator ./cmd/main.go",
 		"build:all": "npm run build:linux && npm run build:macos && npm run build:windows",
-		"build:linux": "GOOS=linux GOARCH=amd64 go build -ldflags \"-X github.com/wowblvck/i18n-translator/internal/cli.Version=v$npm_package_version\" -o bin/i18n-ai-translator-linux-x64 ./cmd/main.go",
+		"build:linux": "GOOS=linux GOARCH=amd64 go build -ldflags \"-X github.com/wowblvck/i18n-translator/internal/cli.Version=v$npm_package_version\" -o bin/i18n-ai-translator-linux-x64 ./cmd/main.go && GOOS=linux GOARCH=arm64 go build -ldflags \"-X github.com/wowblvck/i18n-translator/internal/cli.Version=v$npm_package_version\" -o bin/i18n-ai-translator-linux-arm64 ./cmd/main.go",
 		"build:macos": "GOOS=darwin GOARCH=amd64 go build -ldflags \"-X github.com/wowblvck/i18n-translator/internal/cli.Version=v$npm_package_version\" -o bin/i18n-ai-translator-darwin-x64 ./cmd/main.go && GOOS=darwin GOARCH=arm64 go build -ldflags \"-X github.com/wowblvck/i18n-translator/internal/cli.Version=v$npm_package_version\" -o bin/i18n-ai-translator-darwin-arm64 ./cmd/main.go",
-		"build:windows": "GOOS=windows GOARCH=amd64 go build -ldflags \"-X github.com/wowblvck/i18n-translator/internal/cli.Version=v$npm_package_version\" -o bin/i18n-ai-translator-windows-x64.exe ./cmd/main.go",
+		"build:windows": "GOOS=windows GOARCH=amd64 go build -ldflags \"-X github.com/wowblvck/i18n-translator/internal/cli.Version=v$npm_package_version\" -o bin/i18n-ai-translator-windows-x64.exe ./cmd/main.go && GOOS=windows GOARCH=arm64 go build -ldflags \"-X github.com/wowblvck/i18n-translator/internal/cli.Version=v$npm_package_version\" -o bin/i18n-ai-translator-windows-arm64.exe ./cmd/main.go",
 		"lint:go": "golangci-lint run ./...",
 		"postinstall": "node scripts/postinstall.js",
 		"clean": "rm -rf bin/"
@@ -41,7 +41,7 @@
 		"README.md"
 	],
 	"engines": {
-		"node": ">=16.0.0"
+		"node": ">=22.0.0"
 	},
 	"os": [
 		"darwin",

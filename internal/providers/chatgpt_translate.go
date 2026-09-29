@@ -29,5 +29,5 @@ func ChatGPTProvider(apiKey string, model string, timeout time.Duration) (*ChatG
 }
 
 func (c *ChatGPTService) Translate(text, sourceLang, targetLang string) (string, error) {
-	return performTranslation(c.client, c.model, text, sourceLang, targetLang)
+	return performTranslation(c.client, c.model, text, sourceLang, targetLang, 0.2)
 }

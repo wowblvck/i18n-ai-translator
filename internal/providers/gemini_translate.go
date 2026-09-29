@@ -18,7 +18,7 @@ func GeminiProvider(apiKey, model string, timeout time.Duration) (*GeminiService
 		return nil, errors.New("gemini api key is required")
 	}
 	if strings.TrimSpace(model) == "" {
-		model = "gemini-2.0-flash"
+		model = "gemini-3.8-flash"
 	}
 	config := openai.DefaultConfig(apiKey)
 	config.BaseURL = "https://generativelanguage.googleapis.com/v1beta/openai"
@@ -30,5 +30,5 @@ func GeminiProvider(apiKey, model string, timeout time.Duration) (*GeminiService
 }
 
 func (g *GeminiService) Translate(text, sourceLang, targetLang string) (string, error) {
-	return performTranslation(g.client, g.model, text, sourceLang, targetLang)
+	return performTranslation(g.client, g.model, text, sourceLang, targetLang, 0)
 }

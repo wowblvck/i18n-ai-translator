@@ -18,7 +18,7 @@ func GroqProvider(apiKey, model string, timeout time.Duration) (*GroqService, er
 		return nil, errors.New("groq api key is required")
 	}
 	if strings.TrimSpace(model) == "" {
-		model = "llama-3.3-70b-versatile"
+		model = "openai/gpt-oss-120b"
 	}
 	config := openai.DefaultConfig(apiKey)
 	config.BaseURL = "https://api.groq.com/openai/v1"
@@ -30,5 +30,5 @@ func GroqProvider(apiKey, model string, timeout time.Duration) (*GroqService, er
 }
 
 func (g *GroqService) Translate(text, sourceLang, targetLang string) (string, error) {
-	return performTranslation(g.client, g.model, text, sourceLang, targetLang)
+	return performTranslation(g.client, g.model, text, sourceLang, targetLang, 0.2)
 }

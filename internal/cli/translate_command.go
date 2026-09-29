@@ -13,7 +13,7 @@ func runTranslateCommand(binaryName string, args []string) int {
 
 	var (
 		concurrency  = fs.Int("concurrency", defaultConcurrency, "Number of parallel workers")
-		model        = fs.String("model", "", "Model name (defaults: chatgpt=gpt-4o-mini, groq=llama-3.3-70b-versatile, gemini=gemini-2.0-flash, ollama=llama3.2)")
+		model        = fs.String("model", "", "Model name (defaults: chatgpt=gpt-4o-mini, groq=openai/gpt-oss-120b, gemini=gemini-3.8-flash, ollama=llama3.2)")
 		sourceDir    = fs.String("source", defaultSourceDir, "Source language directory")
 		targetDir    = fs.String("target", defaultTargetDir, "Target directory for translations")
 		sourceLang   = fs.String("from", defaultSourceLang, "Source language code")
@@ -44,8 +44,8 @@ func runTranslateCommand(binaryName string, args []string) int {
 		fs.PrintDefaults()
 		fmt.Fprintln(os.Stderr, "\nExamples:")
 		fmt.Fprintf(os.Stderr, "  %s --service=chatgpt --api-key=YOUR_KEY --from=en --to=ru,es,fr\n", binaryName)
-		fmt.Fprintf(os.Stderr, "  %s --service=groq --api-key=YOUR_KEY --model=llama-3.3-70b-versatile --to=ru\n", binaryName)
-		fmt.Fprintf(os.Stderr, "  %s --service=gemini --api-key=YOUR_KEY --model=gemini-2.0-flash --to=ru\n", binaryName)
+		fmt.Fprintf(os.Stderr, "  %s --service=groq --api-key=YOUR_KEY --model=openai/gpt-oss-120b --to=ru\n", binaryName)
+		fmt.Fprintf(os.Stderr, "  %s --service=gemini --api-key=YOUR_KEY --model=gemini-3.8-flash --to=ru\n", binaryName)
 		fmt.Fprintf(os.Stderr, "  %s --service=ollama --model=llama3.2 --to=ru,es\n", binaryName)
 		fmt.Fprintf(os.Stderr, "  %s --service=lmstudio --model=your-model --to=ru,es\n", binaryName)
 		fmt.Fprintf(os.Stderr, "  %s --config=.i18n-translator.yaml --to=ru,es\n", binaryName)

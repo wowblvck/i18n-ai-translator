@@ -26,5 +26,5 @@ func LMStudioProvider(baseURL, model string, timeout time.Duration) (*LMStudioSe
 }
 
 func (l *LMStudioService) Translate(text, sourceLang, targetLang string) (string, error) {
-	return performTranslation(l.client, l.model, text, sourceLang, targetLang)
+	return performTranslation(l.client, l.model, text, sourceLang, targetLang, 0.2)
 }
